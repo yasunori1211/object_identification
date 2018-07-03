@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(ssh_object_identification)
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake)
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
 
@@ -21,7 +22,10 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 find_package(OpenGL REQUIRED)
-find_package(Qt5Widgets REQUIRED)
+set(QT_USE_QTOPENGL TRUE)
+set(QT_USE_QTXML TRUE)
+#find_package(Qt5Widgets REQUIRED)
+find_package(QGLViewer REQUIRED)
 ## find_package(Qt5Declarative REQUIRED)
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -113,7 +117,7 @@ find_package(Qt5Widgets REQUIRED)
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
+  INCLUDE_DIRS include
 #  LIBRARIES ssh_object_identification
 #  CATKIN_DEPENDS cv_bridge dynamic_reconfigure pcl_conversions pcl_msgs pcl_ros rosbag roscpp rospy sensor_msgs std_msgs
 #  DEPENDS system_lib
@@ -123,17 +127,24 @@ catkin_package(
 ## Build ##
 ###########
 
+add_library(src_lib
+    src/viewer.cpp
+    )
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
-  ${Qt5Widgets_INCLUDES}
+  #${Qt5Widgets_INCLUDES}
+  ${QGLVIEWER_INCLUDE_DIR}
+  ${QT_INCLUDES}
 )
 
 LIST(APPEND LINK_LIBS
   ${catkin_LIBRARIES}
-  ${Qt5Widgets_LIBRARIES}
+  #${Qt5Widgets_LIBRARIES}
+  ${QT_LIBRARIES}
+  ${QGLVIEWER_LIBRARY} GL glut GLU
 )
 
 ## Declare a C++ library
@@ -141,8 +152,9 @@ LIST(APPEND LINK_LIBS
 #   src/${PROJECT_NAME}/ssh_object_identification.cpp
 # )
 
-add_definitions(${Qt5Widgets_DEFINITIONS})
-set(CMAKE_CXX_FLAGS "${Qt5Widgets_EXECUTABLE_COMPILE_FLAGS}")
+#add_definitions(${Qt5Widgets_DEFINITIONS})
+#set(CMAKE_CXX_FLAGS "${Qt5Widgets_EXECUTABLE_COMPILE_FLAGS}")
+
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
@@ -153,7 +165,8 @@ set(CMAKE_CXX_FLAGS "${Qt5Widgets_EXECUTABLE_COMPILE_FLAGS}")
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(${PROJECT_NAME} src/main.cpp)
 
-target_link_libraries(${PROJECT_NAME} ${LINK_LIBS})
+target_link_libraries(src_lib ${LINK_LIBS})
+target_link_libraries(${PROJECT_NAME} src_lib)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
