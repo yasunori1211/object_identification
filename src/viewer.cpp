@@ -2,7 +2,7 @@
 
 void Viewer::draw(){
     glDisable(GL_LIGHTING);
-    drawCam();
+    drawOrigin();
     //drawNormal();
 
     glPointSize(1);
@@ -23,7 +23,7 @@ void Viewer::draw(){
 void Viewer::init(){
     restoreStateFromFile();
     help();
-    centroid.resize(3);
+    centroid.resize(3);//Atamawarui
     setPointCloud();
 }
 
@@ -34,27 +34,71 @@ QString Viewer::helpString() const {
 }
 
 void Viewer::setPointCloud(){
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<PointT>::Ptr cloud (new pcl::PointCloud<PointT>);
+    pcl::PointCloud<PointT>::Ptr cloud_filtered (new pcl::PointCloud<PointT>);
+    pcl::PointCloud<PointT>::Ptr cloud_cylinder (new pcl::PointCloud<PointT>);
     pcl::io::loadPCDFile("/home/aisl/catkin_ws/pcd_data.pcd", *cloud); 
 
+    /**Remove nan points**/
+    std::vector<int> indices;
+    pcl::removeNaNFromPointCloud(*cloud, *cloud, indices);
+
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+    for(int i=0;i<cloud->points.size();i++){
+        cloud->points[i].r = 200;
+        cloud->points[i].g = 200;
+        cloud->points[i].b = 200;
+    }
 
     *cloud_filtered = *cloud;
 
-    removeOutlier(cloud_filtered);
+    //removeOutlier(cloud_filtered);
 
+    /**Move origin to centroid of point cloud**/
     calc3DCentroid(cloud_filtered);
     translation(cloud_filtered);
-
+    /**Remove ground**/
     detectSurface(cloud_filtered, inliers);
     removeOrExtractSurface(cloud_filtered, inliers, true);//remove surface
+    /**Rotate**/
     orientation(cloud_filtered);
-
+    /**Remove unnecessary point cloud**/
     removeDepth(cloud_filtered);
-
+    /**Move again**/
     calc3DCentroid(cloud_filtered);
     translation(cloud_filtered);
+    /**Detect cylinder**/
+    //*cloud_cylinder = *cloud_filtered;
+    //detectCylinder(cloud_cylinder, cloud_filtered);
+
+    std::vector<pcl::PointCloud<PointT>::Ptr> clustered_cloud;
+    clustering(cloud_filtered, clustered_cloud);
+    /**
+    float max, min;
+    for(int i=0;i<cloud_filtered->points.size();i++){
+        if(i==0){
+            max=min=std::abs(cloud_filtered->points[i].y);
+        }
+        else{
+            if(std::abs(cloud_filtered->points[i].y)<min) min = std::abs(cloud_filtered->points[i].y);
+            if(std::abs(cloud_filtered->points[i].y)>max) max = std::abs(cloud_filtered->points[i].y);
+        }
+    }
+    max = 0.1;
+    for(int i=0;i<cloud_filtered->points.size();i++){
+        int color;
+        if(std::abs(cloud_filtered->points[i].y)>max) color = 255*(max-min)/(max-min);
+        else color = 255*((std::abs(cloud_filtered->points[i].y)-min)/(max-min));
+        cloud_filtered->points[i].r = color;
+        cloud_filtered->points[i].g = color;
+        cloud_filtered->points[i].b = color;
+    }
+    **/
+    if(!cloud_cylinder->points.empty()){
+        *cloud_filtered += *cloud_cylinder;
+        std::cout << "filtered poitns " << cloud_filtered->points.size() << std::endl;
+        std::cout << "cylinder poitns " << cloud_cylinder->points.size() << std::endl;
+    }
 
     numPoints = cloud_filtered->points.size();
     MyVertex* tmpBuffer = new MyVertex[numPoints];
@@ -62,11 +106,10 @@ void Viewer::setPointCloud(){
         tmpBuffer[i].point[0] = cloud_filtered->points[i].x;
         tmpBuffer[i].point[1] = cloud_filtered->points[i].y;
         tmpBuffer[i].point[2] = cloud_filtered->points[i].z;
-        tmpBuffer[i].color[0] = 200;
-        tmpBuffer[i].color[1] = 200;
-        tmpBuffer[i].color[2] = 200;
-        tmpBuffer[i].color[3] = 200;
-
+        tmpBuffer[i].color[0] = cloud_filtered->points[i].r;
+        tmpBuffer[i].color[1] = cloud_filtered->points[i].g;
+        tmpBuffer[i].color[2] = cloud_filtered->points[i].b;
+        tmpBuffer[i].color[3] = 255;
     }
     vertexBufferId=0;
     glGenBuffers(1, &vertexBufferId);
@@ -74,7 +117,7 @@ void Viewer::setPointCloud(){
     glBufferData(GL_ARRAY_BUFFER, sizeof(MyVertex) * numPoints, tmpBuffer, GL_STATIC_DRAW);
 }
 
-void Viewer::drawCam() {
+    void Viewer::drawOrigin() {
     glLineWidth(1);
     glBegin(GL_LINES);
     glColor3f(1.0,0.0,0.0);
@@ -89,16 +132,16 @@ void Viewer::drawCam() {
     glEnd();
 }
 
-void Viewer::removeOutlier(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
-  pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
+void Viewer::removeOutlier(pcl::PointCloud<PointT>::Ptr cloud){
+  pcl::StatisticalOutlierRemoval<PointT> sor;
   sor.setInputCloud (cloud);
   sor.setMeanK (5);
   sor.setStddevMulThresh (0.1);
   sor.filter (*cloud);
 }
 
-void Viewer::removeDepth(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
-    pcl::PassThrough<pcl::PointXYZ> pass; 
+void Viewer::removeDepth(pcl::PointCloud<PointT>::Ptr cloud){
+    pcl::PassThrough<PointT> pass; 
     pass.setInputCloud (cloud);
     pass.setFilterFieldName ("z"); 
     pass.setFilterLimits (-0.5, 0.0);
@@ -108,10 +151,10 @@ void Viewer::removeDepth(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
     pass.filter (*cloud);
 }
 
-void Viewer::removeOrExtractSurface(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointIndices::Ptr inliers, bool negative){
+void Viewer::removeOrExtractSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers, bool negative){
     //Remove or Extract surface
     //True means removing surface, false means extracting surface
-    pcl::ExtractIndices<pcl::PointXYZ> extract;
+    pcl::ExtractIndices<PointT> extract;
 
     extract.setInputCloud(cloud);
     extract.setIndices(inliers);
@@ -119,7 +162,7 @@ void Viewer::removeOrExtractSurface(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, p
     extract.filter(*cloud);
 }
 
-void Viewer::translation(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
+void Viewer::translation(pcl::PointCloud<PointT>::Ptr cloud){
     //Move origin to centroid of pointcloud
     for(size_t i = 0; i < cloud->points.size(); i++){
         cloud->points[i].x = cloud->points[i].x - centroid[0];
@@ -129,7 +172,7 @@ void Viewer::translation(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
 }
 
 
-void Viewer::orientation(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
+void Viewer::orientation(pcl::PointCloud<PointT>::Ptr cloud){
     std::vector<float> origin{0.0,-1.0,0.0};
     float yxCosTheta, yzCosTheta;
     float yxtheta, yztheta;
@@ -174,12 +217,26 @@ void Viewer::orientation(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
     }
 }
 
-void Viewer::estimateNormal(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<pcl::Normal>::Ptr normals){ pcl::NormalEstimationOMP<pcl::PointXYZ, pcl::Normal> ne;  
-    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ> ()); 
+void Viewer::estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<pcl::Normal>::Ptr normals){
+    pcl::NormalEstimationOMP<PointT, pcl::Normal> ne;  
+    pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT> ()); 
     ne.setInputCloud (cloud);
     ne.setSearchMethod (tree);
     ne.setRadiusSearch (0.03);
     ne.compute (*normals);
+
+
+    pcl::visualization::PCLVisualizer viewer ("3D Viewer");
+    viewer.setBackgroundColor(0,0,0);
+    pcl::visualization::PointCloudColorHandlerRGBField<PointT> rgb(cloud);
+    viewer.addPointCloud<PointT> (cloud, rgb, "Input cloud");
+    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,3,"Input cloud");
+    viewer.addPointCloudNormals<PointT,pcl::Normal>(cloud,normals,10,0.05,"normals");
+
+    while(!viewer.wasStopped())
+    {
+        viewer.spinOnce (100);
+    }
 }
 
 void Viewer::drawNormal(){
@@ -193,7 +250,7 @@ void Viewer::drawNormal(){
     glEnd();
 }
 
-void Viewer::calc3DCentroid(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
+void Viewer::calc3DCentroid(pcl::PointCloud<PointT>::Ptr cloud){
     Eigen::Vector4f xyz_centroid;
     pcl::compute3DCentroid(*cloud, xyz_centroid);
 
@@ -202,10 +259,10 @@ void Viewer::calc3DCentroid(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
     centroid[2] = xyz_centroid[2];
 }
 
-void Viewer::detectSurface(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointIndices::Ptr inliers){
+void Viewer::detectSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers){
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
 
-    pcl::SACSegmentation<pcl::PointXYZ> seg;
+    pcl::SACSegmentation<PointT> seg;
     seg.setOptimizeCoefficients(true);
     seg.setInputCloud(cloud);
     seg.setModelType(pcl::SACMODEL_PLANE);
@@ -214,4 +271,58 @@ void Viewer::detectSurface(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::Point
     seg.segment(*inliers, *coefficients);
 
     normal = coefficients->values;
+}
+
+void Viewer::detectCylinder(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<PointT>::Ptr cloud_other){
+    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+    pcl::ExtractIndices<PointT> extract;
+    pcl::SACSegmentationFromNormals<PointT, pcl::Normal> seg;
+    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals(new pcl::PointCloud<pcl::Normal>);
+
+    estimateNormal(cloud, cloud_normals);
+
+    seg.setOptimizeCoefficients(true);
+    seg.setInputCloud(cloud);
+    //seg.setModelType(pcl::SACMODEL_PERPENDICULAR_PLANE);
+    seg.setModelType(pcl::SACMODEL_CYLINDER);
+    seg.setMethodType(pcl::SAC_RANSAC);
+    seg.setNormalDistanceWeight (0.1);
+    seg.setMaxIterations(10000);
+    seg.setDistanceThreshold(0.05);
+    seg.setRadiusLimits(0, 0.2);
+    seg.setInputNormals (cloud_normals);
+    seg.segment(*inliers, *coefficients);
+
+    extract.setInputCloud(cloud);
+    extract.setIndices(inliers);
+    extract.setNegative(false);
+    extract.filter(*cloud);
+    extract.setInputCloud(cloud_other);
+    extract.setNegative(true);
+    extract.filter(*cloud_other);
+
+    for(int i=0;i<cloud->points.size();i++){
+        cloud->points[i].r = 255;
+        cloud->points[i].g = 0;
+        cloud->points[i].b = 0;
+    }
+}
+
+void Viewer::clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::PointCloud<PointT>::Ptr> clustered_cloud){
+    pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT>);  
+    tree->setInputCloud (cloud);  
+
+    std::vector<pcl::PointIndices> cluster_indices;  
+    pcl::EuclideanClusterExtraction<PointT> ec;  
+    ec.setClusterTolerance(0.02); // 2cm  
+    ec.setMinClusterSize(100);  
+    ec.setMaxClusterSize(25000);  
+    ec.setSearchMethod(tree);  
+    ec.setInputCloud(cloud);  
+    ec.extract (cluster_indices);  
+
+
+    std::cout << "Find " << cluster_indices.size() << " cluster" << std::endl;
+
 }
