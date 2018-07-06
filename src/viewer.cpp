@@ -322,7 +322,15 @@ void Viewer::clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::Poi
     ec.setInputCloud(cloud);  
     ec.extract (cluster_indices);  
 
-
+    float colors[3][3] = {{255,0,0},{0,255,0},{0,0,255}};
+    int j=0;
+    for(std::vector<pcl::PointIndices>::const_iterator it=cluster_indices.begin();it!=cluster_indices.end();++it){
+        for(std::vector<int>::const_iterator pit=it->indices.begin();pit!=it->indices.end(); pit++){
+            cloud->points[*pit].r = colors[j%3][0];
+            cloud->points[*pit].g = colors[j%3][1];
+            cloud->points[*pit].b = colors[j%3][2];
+        }
+        j++;
+    }
     std::cout << "Find " << cluster_indices.size() << " cluster" << std::endl;
-
 }
