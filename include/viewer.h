@@ -1,5 +1,6 @@
 #define GL_GLEXT_PROTOTYPES 1
 #include <QGLViewer/qglviewer.h>
+#include <qmessagebox.h>
 
 // PCL includes
 #include <pcl_conversions/pcl_conversions.h>
@@ -35,10 +36,19 @@ struct MyVertex
     uchar color[4];
 };
 
+struct FramePoints
+{
+    GLfloat point[3];
+};
+
 class Viewer : public QGLViewer {
     public:
         virtual void draw();
+        virtual void drawWithNames();
+        void drawObject(int id);
+        void drawObjFrame(int id);
         virtual void init();
+        virtual void postSelection(const QPoint &point);
         virtual QString helpString() const;
         void setPointCloud();
         void drawOrigin();
@@ -49,15 +59,20 @@ class Viewer : public QGLViewer {
         void removeOutlier(pcl::PointCloud<PointT>::Ptr cloud);
         void removeDepth(pcl::PointCloud<PointT>::Ptr cloud);
         void drawNormal();
-        void calc3DCentroid(pcl::PointCloud<PointT>::Ptr cloud);
+        void calc3DCentroid(pcl::PointCloud<PointT>::Ptr cloud, std::vector<float> &centroid);
         void detectSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers);
         void detectCylinder(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<PointT>::Ptr cloud_other);
-        void clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::PointCloud<PointT>::Ptr> clustered_cloud);
+        void clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::PointCloud<PointT>::Ptr> &clustered_cloud);
 
     private:
-        GLuint vertexBufferId;
-        int numPoints;
+        GLuint *vertexBufferId;
+        int *numPoints;
+        int numCluster;
         std::vector<float> normal;
         std::vector<float> centroid;
+        std::vector<std::vector<FramePoints>> framePoints;
+
+        //For select
+        qglviewer::Vec orig, dir, selectedPoint;
 };
 
