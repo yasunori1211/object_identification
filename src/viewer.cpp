@@ -1,5 +1,68 @@
 #include "viewer.h"
 
+void Viewer::init(){
+    restoreStateFromFile();
+    help();
+    setPointCloud();
+}
+
+void Viewer::setPointCloud(){
+    pcl::PointCloud<PointT>::Ptr cloud (new pcl::PointCloud<PointT>);
+    pcl::PointCloud<PointT>::Ptr cloud_filtered (new pcl::PointCloud<PointT>);
+    pcl::PointCloud<PointT>::Ptr cloud_cylinder (new pcl::PointCloud<PointT>);
+    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+    pcl::io::loadPCDFile("/home/aisl/catkin_ws/pcd_data.pcd", *cloud); 
+
+    //Initialize color
+    for(int i=0;i<cloud->points.size();i++){
+        cloud->points[i].r = 200;
+        cloud->points[i].g = 200;
+        cloud->points[i].b = 200;
+    }
+
+    /**Remove nan points**/
+    std::vector<int> indices;
+    pcl::removeNaNFromPointCloud(*cloud, *cloud, indices);
+
+    *cloud_filtered = *cloud;
+
+    //removeOutlier(cloud_filtered);
+
+    /**Move origin to centroid of point cloud**/
+    //translation(cloud_filtered);
+
+    /**Remove ground**/
+    detectSurface(cloud_filtered, inliers);
+    removeOrExtractSurface(cloud_filtered, inliers, true);//remove surface
+
+    /**Rotate**/
+    //orientation(cloud_filtered);
+
+    /**Remove unnecessary point cloud**/
+    removeDepth(cloud_filtered);
+
+    /**Clustering the point cloud**/
+    std::vector<pcl::PointCloud<PointT>::Ptr> clustered_cloud;
+    clustering(cloud_filtered, clustered_cloud);
+
+    /**Identify**/
+    for(int i=0;i<clustered_cloud.size();i++)
+        if(detectCylinder(clustered_cloud[i], cloud_filtered)){
+            std::cout << "Detected cylinder!" << std::endl;
+            objName[i] = "cylinder";
+        }else if(detectRectangular(clustered_cloud[i], cloud_filtered)){
+            std::cout << "Detected Rectangular" << std::endl;
+            objName[i] = "rectangular";
+        }else{
+            objName[i] = "other"; 
+        }
+
+    genVBO(clustered_cloud);
+
+    calcObjFrame(clustered_cloud);
+
+}
+
 void Viewer::draw(){
     glDisable(GL_LIGHTING);
     drawOrigin();
@@ -30,6 +93,40 @@ void Viewer::draw(){
     glEnd();
     }
      **/
+}
+
+void Viewer::drawOrigin() {
+    glLineWidth(1);
+    glBegin(GL_LINES);
+    glColor3f(1.0,0.0,0.0);
+    glVertex3f(0,0,0);
+    glVertex3f(0.2,0,0);
+    glColor3f(0.0,1.0,0.0);
+    glVertex3f(0,0,0);
+    glVertex3f(0,0.2,0);
+    glColor3f(0.0,0.0,1.0);
+    glVertex3f(0,0,0);
+    glVertex3f(0,0,0.2);
+    glEnd();
+}
+
+void Viewer::drawNormal(){
+    glBegin(GL_LINES);
+    glLineWidth(1);
+    glColor3f(0.0,0.0,1.0);
+    //glVertex3f(centroid[0],centroid[1],centroid[2]);
+    //glVertex3f(centroid[0]+normal[0],centroid[1]+normal[1],centroid[2]+normal[2]);
+    glVertex3f(0,0,0);
+    glVertex3f(normal[0],normal[1],normal[2]);
+    glEnd();
+}
+
+void Viewer::drawWithNames(){
+    for(int i=0;i<numCluster;i++){
+        glPushName(i);
+        drawObject(i);
+        glPopName();
+    }
 }
 
 void Viewer::drawObject(int id){
@@ -67,147 +164,9 @@ void Viewer::drawObjFrame(int id){
     glEnd();
 }
 
-void Viewer::drawWithNames(){
-    const int nb = 3;
-    for(int i=0;i<nb;i++){
-        glPushName(i);
-        drawObject(i);
-        glPopName();
-    }
-}
-
-void Viewer::init(){
-    restoreStateFromFile();
-    help();
-    centroid.resize(3);//Atamawarui
-    setPointCloud();
-}
-
-void Viewer::postSelection(const QPoint &point){
-    camera()->convertClickToLine(point, orig, dir);
-
-    bool found;
-    selectedPoint = camera()->pointUnderPixel(point, found);
-    selectedPoint -= 0.01f * dir;
-
-    /**
-      if(selectedName() == -1)
-      QMessageBox::information(this, "No selection",  "No object selected under pixel" + QString::number(point.x()) + "," + QString::number(point.y()));
-
-      else
-      QMessageBox::information(
-      this, "Selection", "Object number" + QString::number(selectedName()) + " selected under pixel" + QString::number(point.x()) + "," + QString::number(point.y()));
-     **/
-
-}
-
-QString Viewer::helpString() const {
-    QString text("<h2>V i e w e r</h2>");
-    text += "Left click while pressing the <b>Shift</b> key to select an object of the scene.<br><br>";
-    text += "Test";
-    return text;
-}
-
-void Viewer::setPointCloud(){
-    pcl::PointCloud<PointT>::Ptr cloud (new pcl::PointCloud<PointT>);
-    pcl::PointCloud<PointT>::Ptr cloud_filtered (new pcl::PointCloud<PointT>);
-    pcl::PointCloud<PointT>::Ptr cloud_cylinder (new pcl::PointCloud<PointT>);
-    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
-    pcl::io::loadPCDFile("/home/aisl/catkin_ws/pcd_data.pcd", *cloud); 
-
-    /**Remove nan points**/
-    std::vector<int> indices;
-    pcl::removeNaNFromPointCloud(*cloud, *cloud, indices);
-
-    for(int i=0;i<cloud->points.size();i++){
-        cloud->points[i].r = 200;
-        cloud->points[i].g = 200;
-        cloud->points[i].b = 200;
-    }
-
-    *cloud_filtered = *cloud;
-
-    //removeOutlier(cloud_filtered);
-
-    /**Move origin to centroid of point cloud**/
-    translation(cloud_filtered);
-
-    /**Remove ground**/
-    detectSurface(cloud_filtered, inliers);
-    removeOrExtractSurface(cloud_filtered, inliers, true);//remove surface
-
-    /**Rotate**/
-    orientation(cloud_filtered);
-
-    /**Remove unnecessary point cloud**/
-    removeDepth(cloud_filtered);
-
-    /**Move again**/
-    translation(cloud_filtered);
-
-    /**Detect cylinder**/
-    //*cloud_cylinder = *cloud_filtered;
-    //detectCylinder(cloud_cylinder, cloud_filtered);
-
-    std::vector<pcl::PointCloud<PointT>::Ptr> clustered_cloud;
-    clustering(cloud_filtered, clustered_cloud);
-    /**
-      float max, min;
-      for(int i=0;i<cloud_filtered->points.size();i++){
-      if(i==0){
-      max=min=std::abs(cloud_filtered->points[i].y);
-      }
-      else{
-      if(std::abs(cloud_filtered->points[i].y)<min) min = std::abs(cloud_filtered->points[i].y);
-      if(std::abs(cloud_filtered->points[i].y)>max) max = std::abs(cloud_filtered->points[i].y);
-      }
-      }
-      max = 0.1;
-      for(int i=0;i<cloud_filtered->points.size();i++){
-      int color;
-      if(std::abs(cloud_filtered->points[i].y)>max) color = 255*(max-min)/(max-min);
-      else color = 255*((std::abs(cloud_filtered->points[i].y)-min)/(max-min));
-      cloud_filtered->points[i].r = color;
-      cloud_filtered->points[i].g = color;
-      cloud_filtered->points[i].b = color;
-      }
-     **/
-
-    /**
-      if(!cloud_cylinder->points.empty()){
-     *cloud_filtered += *cloud_cylinder;
-     std::cout << "filtered poitns " << cloud_filtered->points.size() << std::endl;
-     std::cout << "cylinder poitns " << cloud_cylinder->points.size() << std::endl;
-     }
-     **/
-
-    numCluster = clustered_cloud.size();
-    vertexBufferId = new GLuint[numCluster];
-    numPoints = new int[numCluster];
-    int i=0;
-    for(auto cl : clustered_cloud){
-        int tmpNumPoints = cl->points.size();
-        numPoints[i] = tmpNumPoints;
-        MyVertex* tmpBuffer = new MyVertex[tmpNumPoints];
-        for(int j=0;j<tmpNumPoints;j++){
-            tmpBuffer[j].point[0] = cl->points[j].x;
-            tmpBuffer[j].point[1] = cl->points[j].y;
-            tmpBuffer[j].point[2] = cl->points[j].z;
-            tmpBuffer[j].color[0] = cl->points[j].r;
-            tmpBuffer[j].color[1] = cl->points[j].g;
-            tmpBuffer[j].color[2] = cl->points[j].b;
-            tmpBuffer[j].color[3] = 255;
-        }
-        vertexBufferId[i]=i;
-        glGenBuffers(1, &vertexBufferId[i]);
-        glBindBuffer(GL_ARRAY_BUFFER, vertexBufferId[i]);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(MyVertex) * tmpNumPoints, tmpBuffer, GL_STATIC_DRAW);
-        glBindBuffer(GL_ARRAY_BUFFER,0);
-        i++;
-    }
-
+void Viewer::calcObjFrame(std::vector<pcl::PointCloud<PointT>::Ptr> clustered_cloud){
     //Calculate each object frame points
-    i = 0;
+    int i = 0;
     float alpha = 0.01;
     for(auto cl : clustered_cloud){
         std::vector<float> tmpCentroid(3);
@@ -285,19 +244,29 @@ void Viewer::setPointCloud(){
     }
 }
 
-void Viewer::drawOrigin() {
-    glLineWidth(1);
-    glBegin(GL_LINES);
-    glColor3f(1.0,0.0,0.0);
-    glVertex3f(0,0,0);
-    glVertex3f(0.2,0,0);
-    glColor3f(0.0,1.0,0.0);
-    glVertex3f(0,0,0);
-    glVertex3f(0,0.2,0);
-    glColor3f(0.0,0.0,1.0);
-    glVertex3f(0,0,0);
-    glVertex3f(0,0,0.2);
-    glEnd();
+void Viewer::postSelection(const QPoint &point){
+    camera()->convertClickToLine(point, orig, dir);
+
+    bool found;
+    selectedPoint = camera()->pointUnderPixel(point, found);
+    selectedPoint -= 0.01f * dir;
+
+    /**
+      if(selectedName() == -1)
+      QMessageBox::information(this, "No selection",  "No object selected under pixel" + QString::number(point.x()) + "," + QString::number(point.y()));
+
+      else
+      QMessageBox::information(
+      this, "Selection", "Object number" + QString::number(selectedName()) + " selected under pixel" + QString::number(point.x()) + "," + QString::number(point.y()));
+     **/
+
+}
+
+QString Viewer::helpString() const {
+    QString text("<h2>V i e w e r</h2>");
+    text += "Left click while pressing the <b>Shift</b> key to select an object of the scene.<br><br>";
+    text += "Test";
+    return text;
 }
 
 void Viewer::removeOutlier(pcl::PointCloud<PointT>::Ptr cloud){
@@ -312,10 +281,13 @@ void Viewer::removeDepth(pcl::PointCloud<PointT>::Ptr cloud){
     pcl::PassThrough<PointT> pass; 
     pass.setInputCloud (cloud);
     pass.setFilterFieldName ("z"); 
-    pass.setFilterLimits (-0.5, 0.0);
+    pass.setFilterLimits (0.0, 1.0);
     pass.filter (*cloud);
     pass.setFilterFieldName ("x"); 
-    pass.setFilterLimits (-0.5, 0.2);
+    pass.setFilterLimits (-1.0, 1.0);
+    pass.filter (*cloud);
+    pass.setFilterFieldName ("y"); 
+    pass.setFilterLimits (-1.0, 1.0);
     pass.filter (*cloud);
 }
 
@@ -339,7 +311,6 @@ void Viewer::translation(pcl::PointCloud<PointT>::Ptr cloud){
         cloud->points[i].z = cloud->points[i].z - centroid[2];
     }
 }
-
 
 void Viewer::orientation(pcl::PointCloud<PointT>::Ptr cloud){
     std::vector<float> origin{0.0,-1.0,0.0};
@@ -394,7 +365,7 @@ void Viewer::estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<
     ne.setRadiusSearch (0.03);
     ne.compute (*normals);
 
-
+    /**
     pcl::visualization::PCLVisualizer viewer ("3D Viewer");
     viewer.setBackgroundColor(0,0,0);
     pcl::visualization::PointCloudColorHandlerRGBField<PointT> rgb(cloud);
@@ -406,26 +377,15 @@ void Viewer::estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<
     {
         viewer.spinOnce (100);
     }
-}
-
-void Viewer::drawNormal(){
-    glBegin(GL_LINES);
-    glLineWidth(1);
-    glColor3f(0.0,0.0,1.0);
-    //glVertex3f(centroid[0],centroid[1],centroid[2]);
-    //glVertex3f(centroid[0]+normal[0],centroid[1]+normal[1],centroid[2]+normal[2]);
-    glVertex3f(0,0,0);
-    glVertex3f(normal[0],normal[1],normal[2]);
-    glEnd();
+    **/
 }
 
 void Viewer::calc3DCentroid(pcl::PointCloud<PointT>::Ptr cloud, std::vector<float> &centroid){
     Eigen::Vector4f xyz_centroid;
     pcl::compute3DCentroid(*cloud, xyz_centroid);
 
-    centroid[0] = xyz_centroid[0];
-    centroid[1] = xyz_centroid[1];
-    centroid[2] = xyz_centroid[2];
+    for(int i=0;i<3;i++)
+        centroid.emplace_back(xyz_centroid[i]);
 }
 
 void Viewer::detectSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers){
@@ -442,12 +402,13 @@ void Viewer::detectSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices
     normal = coefficients->values;
 }
 
-void Viewer::detectCylinder(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<PointT>::Ptr cloud_other){
+bool Viewer::detectCylinder(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<PointT>::Ptr cloud_other){
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
     pcl::ExtractIndices<PointT> extract;
     pcl::SACSegmentationFromNormals<PointT, pcl::Normal> seg;
     pcl::PointCloud<pcl::Normal>::Ptr cloud_normals(new pcl::PointCloud<pcl::Normal>);
+    pcl::PointCloud<PointT>::Ptr cylinder(new pcl::PointCloud<PointT>);
 
     estimateNormal(cloud, cloud_normals);
 
@@ -459,22 +420,134 @@ void Viewer::detectCylinder(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<
     seg.setNormalDistanceWeight (0.1);
     seg.setMaxIterations(10000);
     seg.setDistanceThreshold(0.05);
-    seg.setRadiusLimits(0, 0.2);
+    seg.setRadiusLimits(0, 0.5);
     seg.setInputNormals (cloud_normals);
     seg.segment(*inliers, *coefficients);
 
-    extract.setInputCloud(cloud);
-    extract.setIndices(inliers);
-    extract.setNegative(false);
-    extract.filter(*cloud);
-    extract.setInputCloud(cloud_other);
-    extract.setNegative(true);
-    extract.filter(*cloud_other);
+    float ratio = (float)inliers->indices.size()/cloud->points.size();
 
-    for(int i=0;i<cloud->points.size();i++){
-        cloud->points[i].r = 255;
-        cloud->points[i].g = 0;
-        cloud->points[i].b = 0;
+    if(ratio>=0.5){
+        extract.setInputCloud(cloud);
+        extract.setIndices(inliers);
+        extract.setNegative(false);
+        extract.filter(*cylinder);
+        extract.setInputCloud(cloud);
+        extract.setNegative(true);
+        extract.filter(*cloud);
+
+        /**
+        //Invert colors of cylider point cloud
+        for(int i=0;i<cylinder->points.size();i++){
+            cylinder->points[i].r = std::abs(cylinder->points[i].r-255);
+            cylinder->points[i].g = std::abs(cylinder->points[i].g-255);
+            cylinder->points[i].b = std::abs(cylinder->points[i].b-255);
+        }
+        **/
+
+        //Adde Color to cylinder
+        for(int i=0;i<cylinder->points.size();i++){
+            cylinder->points[i].r = 0;
+            cylinder->points[i].g = 255;
+            cylinder->points[i].b = 0;
+        }
+
+        *cloud += *cylinder;
+        /**
+          pcl::visualization::PCLVisualizer viewer ("3D Viewer");
+          viewer.setBackgroundColor(0,0,0);
+          pcl::visualization::PointCloudColorHandlerRGBField<PointT> rgb(cloud);
+          viewer.addPointCloud<PointT> (cloud, rgb, "Input cloud");
+          viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,3,"Input cloud");
+
+          while(!viewer.wasStopped())
+          {
+          viewer.spinOnce (100);
+          }
+         **/
+        return true;
+    }else{
+        return false; 
+    }
+}
+
+bool Viewer::detectRectangular(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<PointT>::Ptr cloud_other){
+    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+    pcl::ExtractIndices<PointT> extract;
+    pcl::SACSegmentation<PointT> seg;
+    pcl::PointCloud<PointT>::Ptr rectangular(new pcl::PointCloud<PointT>);
+    pcl::PointCloud<PointT>::Ptr plane(new pcl::PointCloud<PointT>);
+    pcl::PointCloud<PointT>::Ptr cloud_cp(new pcl::PointCloud<PointT>);
+
+    seg.setOptimizeCoefficients(true);
+    seg.setModelType(pcl::SACMODEL_PLANE);
+    seg.setMethodType(pcl::SAC_RANSAC);
+    seg.setDistanceThreshold(0.01);
+
+    *cloud_cp = *cloud;
+
+    int numPlanes=0;
+    std::vector<std::vector<float>> coef;
+    while(1){
+        seg.setInputCloud(cloud_cp);
+        seg.segment(*inliers, *coefficients);
+
+        if(inliers->indices.empty())
+            break;
+        else{
+            extract.setInputCloud(cloud_cp);
+            extract.setIndices(inliers);
+            extract.setNegative(false);
+            extract.filter(*plane);
+            extract.setNegative(true);
+            extract.filter(*cloud_cp);
+            
+            *rectangular += *plane;
+            coef.emplace_back(coefficients->values);
+            numPlanes++;
+        }
+    }
+
+    bool orthogonal;
+    float threshold = 0.1;
+    for(int i=0;i<coef.size();i++){
+        if(i!=coef.size()-1){
+            float ip = coef[i][0]*coef[i+1][0] + coef[i][1]*coef[i+1][1] + coef[i][2]*coef[i+1][2]; //inner product
+            if(std::abs(ip)>threshold){
+                orthogonal=false;
+                break;
+            }
+        }else{
+            float ip = coef[i][0]*coef[0][0] + coef[i][1]*coef[0][1] + coef[i][2]*coef[0][2];
+            if(ip<threshold)
+                orthogonal=true;
+        }
+    }
+
+    if(numPlanes==3&&orthogonal){ //Detected rectangular
+        //Add red color to rectangular
+        for(int i=0;i<rectangular->points.size();i++){
+            rectangular->points[i].r = 255; 
+            rectangular->points[i].g = 0; 
+            rectangular->points[i].b = 0; 
+        }
+
+        *cloud = *rectangular + *cloud_cp;
+        /**
+          pcl::visualization::PCLVisualizer viewer ("3D Viewer");
+          viewer.setBackgroundColor(0,0,0);
+          pcl::visualization::PointCloudColorHandlerRGBField<PointT> rgb(cloud);
+          viewer.addPointCloud<PointT> (cloud, rgb, "Input cloud");
+          viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,3,"Input cloud");
+
+          while(!viewer.wasStopped())
+          {
+          viewer.spinOnce (100);
+          }
+          **/
+        return true;
+    }else{
+        return false; 
     }
 }
 
@@ -501,6 +574,7 @@ void Viewer::clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::Poi
         clustered_cloud.emplace_back(temp_cloud);
     }
 
+    /**
     //Add color to each cluster
     float colors[6][3] = {{255,0,0},{0,255,0},{0,0,255},{255,255,0},{255,0,255},{0,255,255}};
     int j=0;
@@ -512,6 +586,35 @@ void Viewer::clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::Poi
         }
         j++;
     }
+    **/
 
-    std::cout << "Find " << cluster_indices.size() << " cluster" << std::endl;
+    numCluster = clustered_cloud.size();
+
+    std::cout << "Found " << cluster_indices.size() << " cluster" << std::endl;
+}
+
+void Viewer::genVBO(std::vector<pcl::PointCloud<PointT>::Ptr> clustered_cloud){
+    vertexBufferId = new GLuint[numCluster];
+    numPoints = new int[numCluster];
+    int i=0;
+    for(auto cl : clustered_cloud){
+        int tmpNumPoints = cl->points.size();
+        numPoints[i] = tmpNumPoints;
+        MyVertex* tmpBuffer = new MyVertex[tmpNumPoints];
+        for(int j=0;j<tmpNumPoints;j++){
+            tmpBuffer[j].point[0] = cl->points[j].x;
+            tmpBuffer[j].point[1] = cl->points[j].y;
+            tmpBuffer[j].point[2] = cl->points[j].z;
+            tmpBuffer[j].color[0] = cl->points[j].r;
+            tmpBuffer[j].color[1] = cl->points[j].g;
+            tmpBuffer[j].color[2] = cl->points[j].b;
+            tmpBuffer[j].color[3] = 255;
+        }
+        vertexBufferId[i]=i;
+        glGenBuffers(1, &vertexBufferId[i]);
+        glBindBuffer(GL_ARRAY_BUFFER, vertexBufferId[i]);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(MyVertex) * tmpNumPoints, tmpBuffer, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER,0);
+        i++;
+    }
 }

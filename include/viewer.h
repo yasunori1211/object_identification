@@ -27,6 +27,8 @@
 
 #include <cmath>
 #include <math.h>
+#include <map>
+#include <string.h>
 
 typedef pcl::PointXYZRGB PointT;
 
@@ -43,26 +45,32 @@ struct FramePoints
 
 class Viewer : public QGLViewer {
     public:
+        virtual void init();
+        void setPointCloud();
         virtual void draw();
+        void drawOrigin();
+        void drawNormal();
         virtual void drawWithNames();
         void drawObject(int id);
         void drawObjFrame(int id);
-        virtual void init();
+        void calcObjFrame(std::vector<pcl::PointCloud<PointT>::Ptr> clustered_cloud);
         virtual void postSelection(const QPoint &point);
         virtual QString helpString() const;
-        void setPointCloud();
-        void drawOrigin();
+
+        //Function Operates Point Cloud
         void removeOrExtractSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers, bool negative);
         void translation(pcl::PointCloud<PointT>::Ptr cloud);
         void estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<pcl::Normal>::Ptr normals);
         void orientation(pcl::PointCloud<PointT>::Ptr cloud);
         void removeOutlier(pcl::PointCloud<PointT>::Ptr cloud);
         void removeDepth(pcl::PointCloud<PointT>::Ptr cloud);
-        void drawNormal();
         void calc3DCentroid(pcl::PointCloud<PointT>::Ptr cloud, std::vector<float> &centroid);
         void detectSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers);
-        void detectCylinder(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<PointT>::Ptr cloud_other);
+        bool detectCylinder(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<PointT>::Ptr cloud_other);
+        bool detectRectangular(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<PointT>::Ptr cloud_other);
         void clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::PointCloud<PointT>::Ptr> &clustered_cloud);
+
+        void genVBO(std::vector<pcl::PointCloud<PointT>::Ptr> clustered_cloud);
 
     private:
         GLuint *vertexBufferId;
@@ -71,8 +79,9 @@ class Viewer : public QGLViewer {
         std::vector<float> normal;
         std::vector<float> centroid;
         std::vector<std::vector<FramePoints>> framePoints;
+        std::map<int, std::string> objName;
 
-        //For select
+        //For select object
         qglviewer::Vec orig, dir, selectedPoint;
 };
 
