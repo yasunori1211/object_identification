@@ -23,6 +23,10 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
 )
 
+generate_dynamic_reconfigure_options(
+  cfg/ssh_object_identification.cfg
+)
+
 find_package(OpenGL REQUIRED)
 set(QT_USE_QTOPENGL TRUE)
 set(QT_USE_QTXML TRUE)
@@ -120,7 +124,7 @@ find_package(QGLViewer REQUIRED)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-#  LIBRARIES ssh_object_identification
+  LIBRARIES ssh_object_identification
 #  CATKIN_DEPENDS cv_bridge dynamic_reconfigure pcl_conversions pcl_msgs pcl_ros rosbag roscpp rospy sensor_msgs std_msgs
 #  DEPENDS system_lib
 )
@@ -166,7 +170,9 @@ LIST(APPEND LINK_LIBS
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(${PROJECT_NAME} src/main.cpp)
+add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_gencfg)
 
+target_link_libraries(src_lib ${catkin_LIBRARIES})
 target_link_libraries(src_lib ${LINK_LIBS})
 target_link_libraries(${PROJECT_NAME} src_lib)
 
