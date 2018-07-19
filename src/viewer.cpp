@@ -4,9 +4,12 @@ void Viewer::init(){
     restoreStateFromFile();
     help();
     setedPC = false;
-    numPoints = new int[100];
     glPointSize(5.0);
     glLineWidth(1);
+    numPoints = new int[20];
+    tempInfo.resize(20);
+    cylinderRadius = 0.1;
+    sphereRadius = 0.2;
 }
 
 void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
@@ -15,6 +18,7 @@ void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
     pcl::PointCloud<PointT>::Ptr cloud_cylinder (new pcl::PointCloud<PointT>);
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
 
+    //PointXYZ to PointXYZRGB
     pcl::copyPointCloud(*cloud, *cloud_filtered);
 
     /**Remove nan points**/
@@ -23,15 +27,15 @@ void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
 
     /**Remove ground**/
     detectSurface(cloud_filtered, inliers);
-    removeOrExtractSurface(cloud_filtered, inliers, true);//remove surface
+    removeOrExtractSurface(cloud_filtered, inliers, true);
 
     /**Remove unnecessary point cloud**/
     removeDepth(cloud_filtered);
 
-    //Down sampling
+    /**Down sampling**/
     pcl::ApproximateVoxelGrid<pcl::PointXYZRGB> sor;
     sor.setInputCloud(cloud_filtered);
-    sor.setLeafSize(0.02, 0.02, 0.02);
+    sor.setLeafSize(0.01, 0.01, 0.01);
     sor.filter(*cloud_filtered);
 
     //Initialize color
@@ -44,10 +48,11 @@ void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
     /**Clustering the point cloud**/
     clustering(cloud_filtered, clustered_cloud);
 
-    identify(cloud_filtered);
+    identify();
 
     //set some variables for draw
     std::lock_guard<std::mutex> _guard(mtx);
+    objInfoVec = tempInfo;
     numCluster = clustered_cloud.size();
     copyPointcloud();
     setNumPoints();
@@ -65,11 +70,12 @@ void Viewer::draw(){
     else{
         glDisable(GL_LIGHTING);
         drawOrigin();
-        for(int i=0;i<numCluster;i++)
+        calcProjectedCoordinates();
+        for(int i=0;i<numCluster;i++){
             drawObject(i);
+            drawObjInfo(i);
+        }
     }
-    glColor3f(1.0, 1.0, 1.0);
-    drawText(20, 20, "test");
 }
 
 void Viewer::drawOrigin() {
@@ -141,30 +147,34 @@ void Viewer::estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<
     ne.setSearchMethod (tree);
     ne.setRadiusSearch (0.03);
     ne.compute (*normals);
-
 }
 
-void Viewer::calc3DCentroid(pcl::PointCloud<PointT>::Ptr cloud, std::vector<float> &centroid){
+void Viewer::calc3DCentroid(pcl::PointCloud<PointT>::Ptr cloud, qglviewer::Vec &centroid){
     Eigen::Vector4f xyz_centroid;
     pcl::compute3DCentroid(*cloud, xyz_centroid);
 
-    for(int i=0;i<3;i++)
-        centroid.emplace_back(xyz_centroid[i]);
-
+    centroid.x = xyz_centroid[0];
+    centroid.y = xyz_centroid[1];
+    centroid.z = xyz_centroid[2];
 }
 
-void Viewer::identify(pcl::PointCloud<PointT>::Ptr cloud){
+void Viewer::identify(){
     /**Identify**/
     for(int i=0;i<clustered_cloud.size();i++)
-        if(detectCylinder(clustered_cloud[i], cloud)){
+        if(detectCylinder(clustered_cloud[i])){
             std::cout << "Detected cylinder!" << std::endl;
-        }else if(detectRectangular(clustered_cloud[i], cloud)){
+            tempInfo[i].type = "Cylinder";
+        }else if(detectRectangular(clustered_cloud[i])){
             std::cout << "Detected Rectangular" << std::endl;
+            tempInfo[i].type = "Rectangular";
+        }else if(detectSphere(clustered_cloud[i])){
+            std::cout << "Detected Sphere" << std::endl;
+            tempInfo[i].type = "Sphere";
         }else{
             std::cout << "Detected Other object" << std::endl;
+            tempInfo[i].type = "Other";
         }
 }
-
 
 void Viewer::detectSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers){
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
@@ -180,7 +190,7 @@ void Viewer::detectSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices
     normal = coefficients->values;
 }
 
-bool Viewer::detectCylinder(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<PointT>::Ptr cloud_other){
+bool Viewer::detectCylinder(pcl::PointCloud<PointT>::Ptr cloud){
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
     pcl::ExtractIndices<PointT> extract;
@@ -197,8 +207,8 @@ bool Viewer::detectCylinder(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<
     seg.setMethodType(pcl::SAC_RANSAC);
     seg.setNormalDistanceWeight (0.1);
     seg.setMaxIterations(10000);
-    seg.setDistanceThreshold(0.05);
-    seg.setRadiusLimits(0, 0.5);
+    seg.setDistanceThreshold(0.03);
+    seg.setRadiusLimits(0, cylinderRadius);
     seg.setInputNormals (cloud_normals);
     seg.segment(*inliers, *coefficients);
 
@@ -230,25 +240,13 @@ bool Viewer::detectCylinder(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<
         }
 
         *cloud += *cylinder;
-        /**
-          pcl::visualization::PCLVisualizer viewer ("3D Viewer");
-          viewer.setBackgroundColor(0,0,0);
-          pcl::visualization::PointCloudColorHandlerRGBField<PointT> rgb(cloud);
-          viewer.addPointCloud<PointT> (cloud, rgb, "Input cloud");
-          viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,3,"Input cloud");
-
-          while(!viewer.wasStopped())
-          {
-          viewer.spinOnce (100);
-          }
-         **/
         return true;
     }else{
         return false; 
     }
 }
 
-bool Viewer::detectRectangular(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<PointT>::Ptr cloud_other){
+bool Viewer::detectRectangular(pcl::PointCloud<PointT>::Ptr cloud){
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
     pcl::ExtractIndices<PointT> extract;
@@ -287,10 +285,10 @@ bool Viewer::detectRectangular(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointClo
     }
 
     bool orthogonal;
-    float threshold = 0.1;
+    float threshold = 0.2;
     for(int i=0;i<coef.size();i++){
         if(i!=coef.size()-1){
-            float ip = coef[i][0]*coef[i+1][0] + coef[i][1]*coef[i+1][1] + coef[i][2]*coef[i+1][2]; //inner product
+            float ip = coef[i][0]*coef[i+1][0] + coef[i][1]*coef[i+1][1] + coef[i][2]*coef[i+1][2]; //inner product( cos(theta) )
             if(std::abs(ip)>threshold){
                 orthogonal=false;
                 break;
@@ -311,18 +309,53 @@ bool Viewer::detectRectangular(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointClo
         }
 
         *cloud = *rectangular + *cloud_cp;
-        /**
-          pcl::visualization::PCLVisualizer viewer ("3D Viewer");
-          viewer.setBackgroundColor(0,0,0);
-          pcl::visualization::PointCloudColorHandlerRGBField<PointT> rgb(cloud);
-          viewer.addPointCloud<PointT> (cloud, rgb, "Input cloud");
-          viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,3,"Input cloud");
+        return true;
+    }else{
+        return false; 
+    }
+}
 
-          while(!viewer.wasStopped())
-          {
-          viewer.spinOnce (100);
-          }
-          **/
+bool Viewer::detectSphere(pcl::PointCloud<PointT>::Ptr cloud){
+    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+    pcl::ExtractIndices<PointT> extract;
+    pcl::SACSegmentationFromNormals<PointT, pcl::Normal> seg;
+    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals(new pcl::PointCloud<pcl::Normal>);
+    pcl::PointCloud<PointT>::Ptr sphere(new pcl::PointCloud<PointT>);
+
+    estimateNormal(cloud, cloud_normals);
+
+    seg.setOptimizeCoefficients(true);
+    seg.setInputCloud(cloud);
+    //seg.setModelType(pcl::SACMODEL_PERPENDICULAR_PLANE);
+    seg.setModelType(pcl::SACMODEL_NORMAL_SPHERE);
+    seg.setMethodType(pcl::SAC_RANSAC);
+    seg.setNormalDistanceWeight (0.1);
+    seg.setMaxIterations(10000);
+    seg.setDistanceThreshold(0.03);
+    seg.setRadiusLimits(0, sphereRadius);
+    seg.setInputNormals (cloud_normals);
+    seg.segment(*inliers, *coefficients);
+
+    float ratio = (float)inliers->indices.size()/cloud->points.size();
+
+    if(ratio>=0.5){
+        extract.setInputCloud(cloud);
+        extract.setIndices(inliers);
+        extract.setNegative(false);
+        extract.filter(*sphere);
+        extract.setInputCloud(cloud);
+        extract.setNegative(true);
+        extract.filter(*cloud);
+
+        //Adde Color to sphere
+        for(int i=0;i<sphere->points.size();i++){
+            sphere->points[i].r = 0;
+            sphere->points[i].g = 0;
+            sphere->points[i].b = 255;
+        }
+
+        *cloud += *sphere;
         return true;
     }else{
         return false; 
@@ -385,3 +418,16 @@ void Viewer::setNumPoints(){
     }
 }
 
+void Viewer::calcProjectedCoordinates(){
+    objCentroid.clear();
+    for(int i=0;i<numCluster;i++){
+        qglviewer::Vec tempCentroid;
+        calc3DCentroid(clustered_cloud[i], tempCentroid);
+        objCentroid.emplace_back(camera()->projectedCoordinatesOf(tempCentroid));
+    }
+}
+
+void Viewer::drawObjInfo(int i){
+    glColor3f(1.0, 1.0, 1.0);
+    drawText(objCentroid[i].x+20,objCentroid[i].y+20, objInfoVec[i].type);
+}

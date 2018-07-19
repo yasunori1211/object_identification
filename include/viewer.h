@@ -31,17 +31,15 @@
 #include <string.h>
 #include <mutex>
 
+
 typedef pcl::PointXYZRGB PointT;
 
-struct MyVertex
+struct ObjInfo
 {
-    float point[3];
-    uchar color[4];
-};
-
-struct FramePoints
-{
-    GLfloat point[3];
+    QString type;
+    double height;
+    double width;
+    double radius;
 };
 
 class Viewer : public QGLViewer {
@@ -56,16 +54,19 @@ class Viewer : public QGLViewer {
         //Function Operates Point Cloud
         void removeOrExtractSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers, bool negative);
         void estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<pcl::Normal>::Ptr normals);
-        void calc3DCentroid(pcl::PointCloud<PointT>::Ptr cloud, std::vector<float> &centroid);
+        void calc3DCentroid(pcl::PointCloud<PointT>::Ptr cloud, qglviewer::Vec &centroid);
         void removeOutlier(pcl::PointCloud<PointT>::Ptr cloud);
         void removeDepth(pcl::PointCloud<PointT>::Ptr cloud);
-        void identify(pcl::PointCloud<PointT>::Ptr cloud);
+        void identify();
         void detectSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers);
-        bool detectCylinder(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<PointT>::Ptr cloud_other);
-        bool detectRectangular(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<PointT>::Ptr cloud_other);
+        bool detectCylinder(pcl::PointCloud<PointT>::Ptr cloud);
+        bool detectSphere(pcl::PointCloud<PointT>::Ptr cloudi);
+        bool detectRectangular(pcl::PointCloud<PointT>::Ptr cloud);
         void clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::PointCloud<PointT>::Ptr> &clustered_cloud);
         void setNumPoints();
         void copyPointcloud();
+        void calcProjectedCoordinates();
+        void drawObjInfo(int i);
 
     private:
         bool setedPC;
@@ -74,7 +75,12 @@ class Viewer : public QGLViewer {
         std::vector<float> normal;
         std::vector<pcl::PointCloud<PointT>::Ptr> clustered_cloud;
         std::vector<pcl::PointCloud<PointT>::Ptr> result_cloud;
-        std::vector<std::vector<float>> objCentroid;
+        std::vector<qglviewer::Vec> objCentroid;
         std::mutex mtx;
+        std::vector<ObjInfo> tempInfo;
+        std::vector<ObjInfo> objInfoVec;
+        //parameters
+        double cylinderRadius;
+        double sphereRadius;
 };
 
