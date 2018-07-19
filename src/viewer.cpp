@@ -431,3 +431,9 @@ void Viewer::drawObjInfo(int i){
     glColor3f(1.0, 1.0, 1.0);
     drawText(objCentroid[i].x+20,objCentroid[i].y+20, objInfoVec[i].type);
 }
+
+void Viewer::dyconCB(ssh_object_identification::ssh_object_identificationConfig &config, uint32_t level){
+    std::lock_guard<std::mutex> _guard(mtx);
+    cylinderRadius = config.double_cylinderRadiusLimits;
+    sphereRadius = config.double_sphereRadiusLimits;
+}

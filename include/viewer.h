@@ -31,6 +31,7 @@
 #include <string.h>
 #include <mutex>
 
+#include <ssh_object_identification/ssh_object_identificationConfig.h>
 
 typedef pcl::PointXYZRGB PointT;
 
@@ -67,6 +68,7 @@ class Viewer : public QGLViewer {
         void copyPointcloud();
         void calcProjectedCoordinates();
         void drawObjInfo(int i);
+        void dyconCB(ssh_object_identification::ssh_object_identificationConfig &config, uint32_t level);
 
     private:
         bool setedPC;
