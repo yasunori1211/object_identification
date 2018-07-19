@@ -5,6 +5,7 @@
 #include "viewer.h"
 // ROS includes 
 #include <ros/ros.h>
+#include <dynamic_reconfigure/server.h>
 #include <sensor_msgs/PointCloud2.h>
 
 Viewer* viewer=0;
@@ -25,6 +26,12 @@ void rosThreadLoop( int argc, char** argv )
 
     ros::NodeHandle nh;
 
+    dynamic_reconfigure::Server<ssh_object_identification::ssh_object_identificationConfig> server;
+    dynamic_reconfigure::Server<ssh_object_identification::ssh_object_identificationConfig>::CallbackType f;
+
+    f = boost::bind(&Viewer::dyconCB, &*viewer, _1, _2);
+    server.setCallback(f);
+
     ros::Subscriber pointcloud_sub = nh.subscribe(nh.resolveName("camera/depth/points"), 1, pointcloudCb); 
 
     ros::spin();
@@ -44,6 +51,7 @@ int main( int argc, char** argv ) {
     viewer->setWindowTitle("viewer");
 
     viewer->show();
+
 
     boost::thread rosThread;
 
