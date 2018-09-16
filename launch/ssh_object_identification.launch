@@ -1,0 +1,4 @@
+<launch>
+   <node name="ssh_object_identification" pkg="ssh_object_identification" type="ssh_object_identification" output="screen" />
+   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find ssh_object_identification)/config/ssh.rviz" />
+</launch>
