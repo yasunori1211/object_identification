@@ -1,66 +1,46 @@
 #include<stdio.h>
-#include<qapplication.h>
 
-//#include<QtWidgets>
 #include "viewer.h"
 // ROS includes 
 #include <ros/ros.h>
 #include <dynamic_reconfigure/server.h>
 #include <sensor_msgs/PointCloud2.h>
 
-Viewer* viewer=0;
+ros::Publisher pub;
+Viewer viewer;
 
 void pointcloudCb(const sensor_msgs::PointCloud2ConstPtr& input){
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<PointT>::Ptr outputPclCloud(new pcl::PointCloud<PointT>);
+
     pcl::fromROSMsg(*input, *cloud);
 
-    viewer->setPointCloud(cloud);
+    viewer.setPointCloud(cloud, outputPclCloud);
+
+    outputPclCloud->header.frame_id = input->header.frame_id;
+
+    sensor_msgs::PointCloud2 output;
+    pcl::toROSMsg(*outputPclCloud, output);
+    pub.publish(output);
 }
 
-void rosThreadLoop( int argc, char** argv )
-{
-    printf("Started ROS thread\n");
-
-    ros::init(argc, argv, "ssh_object_identification");
-    ROS_INFO("Object identification started");
-
+int main( int argc, char** argv ) {
+    ros::init(argc, argv, "ssh_o");
     ros::NodeHandle nh;
 
+    // Create a ROS subscriber for the input point cloud
+    ros::Subscriber sub = nh.subscribe("/camera/depth/points", 1, pointcloudCb);
+
+    // Create a ROS publisher for the output point cloud
+    pub = nh.advertise<sensor_msgs::PointCloud2>("ssh_object_identification/output", 1);
+
+    //Recongiture
     dynamic_reconfigure::Server<ssh_object_identification::ssh_object_identificationConfig> server;
     dynamic_reconfigure::Server<ssh_object_identification::ssh_object_identificationConfig>::CallbackType f;
 
-    f = boost::bind(&Viewer::dyconCB, &*viewer, _1, _2);
+    f = boost::bind(&Viewer::dyconCB, &viewer, _1, _2);
     server.setCallback(f);
-
-    ros::Subscriber pointcloud_sub = nh.subscribe(nh.resolveName("camera/depth/points"), 1, pointcloudCb); 
-
+    
+    // Spin
     ros::spin();
-    ros::shutdown();
-    printf("Exiting ROS thread\n");
-
-    exit(1);
-}
-
-
-int main( int argc, char** argv ) {
-
-    QApplication application(argc, argv);
-
-    viewer = new Viewer();
-
-    viewer->setWindowTitle("viewer");
-
-    viewer->show();
-
-
-    boost::thread rosThread;
-
-    rosThread = boost::thread(rosThreadLoop, argc, argv);
-
-    application.exec();
-
-    printf("Shutting down... \n");
-    ros::shutdown();
-    rosThread.join();
-    printf("Done. \n");
 }

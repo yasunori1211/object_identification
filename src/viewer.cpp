@@ -1,21 +1,12 @@
 #include "viewer.h"
 
-void Viewer::init(){
-    restoreStateFromFile();
-    help();
-    setedPC = false;
-    glPointSize(5.0);
-    glLineWidth(1);
-    numPoints = new int[20];
-    tempInfo.resize(20);
+Viewer::Viewer(){
     cylinderRadius = 0.1;
     sphereRadius = 0.2;
 }
 
-void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
-    //pcl::PointCloud<PointT>::Ptr cloud (new pcl::PointCloud<PointT>);
+        void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<PointT>::Ptr output){
     pcl::PointCloud<PointT>::Ptr cloud_filtered (new pcl::PointCloud<PointT>);
-    pcl::PointCloud<PointT>::Ptr cloud_cylinder (new pcl::PointCloud<PointT>);
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
 
     //PointXYZ to PointXYZRGB
@@ -50,61 +41,12 @@ void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
 
     identify();
 
-    //set some variables for draw
-    std::lock_guard<std::mutex> _guard(mtx);
-    objInfoVec = tempInfo;
-    numCluster = clustered_cloud.size();
-    copyPointcloud();
-    setNumPoints();
-
-    if(!setedPC)
-        setedPC=true;
-
-    update();
-}
-
-void Viewer::draw(){
-    std::lock_guard<std::mutex> _guard(mtx);
-    if(!setedPC)
-        return;
-    else{
-        glDisable(GL_LIGHTING);
-        drawOrigin();
-        calcProjectedCoordinates();
-        for(int i=0;i<numCluster;i++){
-            drawObject(i);
-            drawObjInfo(i);
-        }
+    pcl::PointCloud<PointT>::Ptr temp (new pcl::PointCloud<PointT>);
+    for(auto cl : clustered_cloud){
+        *temp += *cl;
     }
-}
 
-void Viewer::drawOrigin() {
-    glBegin(GL_LINES);
-    glColor3f(1.0,0.0,0.0);
-    glVertex3f(0,0,0);
-    glVertex3f(0.2,0,0);
-    glColor3f(0.0,1.0,0.0);
-    glVertex3f(0,0,0);
-    glVertex3f(0,0.2,0);
-    glColor3f(0.0,0.0,1.0);
-    glVertex3f(0,0,0);
-    glVertex3f(0,0,0.2);
-    glEnd();
-}
-
-void Viewer::drawObject(int id){
-    glBegin(GL_POINTS);
-    for(int i=0;i<numPoints[id];i++){
-        glColor3f(result_cloud[id]->points[i].r, result_cloud[id]->points[i].g, result_cloud[id]->points[i].b);
-        glVertex3f(result_cloud[id]->points[i].x, result_cloud[id]->points[i].y, result_cloud[id]->points[i].z);
-    }
-    glEnd();
-}
-
-QString Viewer::helpString() const {
-    QString text("<h2>V i e w e r</h2>");
-    text += "Test";
-    return text;
+    pcl::copyPointCloud(*temp, *output);
 }
 
 void Viewer::removeOutlier(pcl::PointCloud<PointT>::Ptr cloud){
@@ -149,30 +91,17 @@ void Viewer::estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<
     ne.compute (*normals);
 }
 
-void Viewer::calc3DCentroid(pcl::PointCloud<PointT>::Ptr cloud, qglviewer::Vec &centroid){
-    Eigen::Vector4f xyz_centroid;
-    pcl::compute3DCentroid(*cloud, xyz_centroid);
-
-    centroid.x = xyz_centroid[0];
-    centroid.y = xyz_centroid[1];
-    centroid.z = xyz_centroid[2];
-}
-
 void Viewer::identify(){
     /**Identify**/
     for(int i=0;i<clustered_cloud.size();i++)
         if(detectCylinder(clustered_cloud[i])){
             std::cout << "Detected cylinder!" << std::endl;
-            tempInfo[i].type = "Cylinder";
         }else if(detectRectangular(clustered_cloud[i])){
             std::cout << "Detected Rectangular" << std::endl;
-            tempInfo[i].type = "Rectangular";
         }else if(detectSphere(clustered_cloud[i])){
             std::cout << "Detected Sphere" << std::endl;
-            tempInfo[i].type = "Sphere";
         }else{
             std::cout << "Detected Other object" << std::endl;
-            tempInfo[i].type = "Other";
         }
 }
 
@@ -400,36 +329,6 @@ void Viewer::clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::Poi
     }
     **/
     std::cout << "Found " << cluster_indices.size() << " cluster" << std::endl;
-}
-
-void Viewer::copyPointcloud(){
-    result_cloud.clear();
-    for(auto cl : clustered_cloud){
-        result_cloud.emplace_back(cl);
-    }
-}
-
-void Viewer::setNumPoints(){
-    int i=0;
-    for(auto cl : clustered_cloud){
-        int tmpNumPoints = cl->points.size();
-        numPoints[i] = tmpNumPoints;
-        i++;
-    }
-}
-
-void Viewer::calcProjectedCoordinates(){
-    objCentroid.clear();
-    for(int i=0;i<numCluster;i++){
-        qglviewer::Vec tempCentroid;
-        calc3DCentroid(clustered_cloud[i], tempCentroid);
-        objCentroid.emplace_back(camera()->projectedCoordinatesOf(tempCentroid));
-    }
-}
-
-void Viewer::drawObjInfo(int i){
-    glColor3f(1.0, 1.0, 1.0);
-    drawText(objCentroid[i].x+20,objCentroid[i].y+20, objInfoVec[i].type);
 }
 
 void Viewer::dyconCB(ssh_object_identification::ssh_object_identificationConfig &config, uint32_t level){
