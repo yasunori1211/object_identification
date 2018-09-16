@@ -43,6 +43,8 @@ class Viewer{
         bool detectSphere(pcl::PointCloud<PointT>::Ptr cloudi);
         bool detectRectangular(pcl::PointCloud<PointT>::Ptr cloud);
         void clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::PointCloud<PointT>::Ptr> &clustered_cloud);
+        void orientation(pcl::PointCloud<PointT>::Ptr cloud);
+        void moveGraund(pcl::PointCloud<PointT>::Ptr cloud);
         void dyconCB(ssh_object_identification::ssh_object_identificationConfig &config, uint32_t level);
 
     private:

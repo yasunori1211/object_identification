@@ -5,7 +5,7 @@ Viewer::Viewer(){
     sphereRadius = 0.2;
 }
 
-        void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<PointT>::Ptr output){
+void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<PointT>::Ptr output){
     pcl::PointCloud<PointT>::Ptr cloud_filtered (new pcl::PointCloud<PointT>);
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
 
@@ -16,12 +16,18 @@ Viewer::Viewer(){
     std::vector<int> indices;
     pcl::removeNaNFromPointCloud(*cloud_filtered, *cloud_filtered, indices);
 
+    /**Remove unnecessary point cloud**/
+    removeDepth(cloud_filtered);
+
+    /**Orientation along X-Y Plane**/
+    detectSurface(cloud_filtered, inliers);
+    orientation(cloud_filtered);
+
+    moveGraund(cloud_filtered);
+
     /**Remove ground**/
     detectSurface(cloud_filtered, inliers);
     removeOrExtractSurface(cloud_filtered, inliers, true);
-
-    /**Remove unnecessary point cloud**/
-    removeDepth(cloud_filtered);
 
     /**Down sampling**/
     pcl::ApproximateVoxelGrid<pcl::PointXYZRGB> sor;
@@ -329,6 +335,69 @@ void Viewer::clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::Poi
     }
     **/
     std::cout << "Found " << cluster_indices.size() << " cluster" << std::endl;
+}
+
+void Viewer::orientation(pcl::PointCloud<PointT>::Ptr cloud){ std::vector<float> origin{0.0,-1.0,0.0};
+    float yxCosTheta, yzCosTheta;
+    float yxtheta, yztheta;
+
+    float yxscalar = std::sqrt(std::pow(origin[0], 2)+std::pow(origin[1], 2))*std::sqrt(std::pow(normal[0], 2)+std::pow(normal[1], 2));
+    float yzscalar = std::sqrt(std::pow(origin[1], 2)+std::pow(origin[2], 2))*std::sqrt(std::pow(normal[1], 2)+std::pow(normal[2], 2));
+
+    yxCosTheta = (origin[0]*normal[0] + origin[1]*normal[1])/yxscalar;
+    yzCosTheta = (origin[0]*normal[0] + origin[1]*normal[1])/yzscalar;
+
+    yxtheta = std::acos(yxCosTheta);
+    yztheta = std::acos(yzCosTheta);
+
+    Eigen::Matrix3f xOri, zOri, ori;
+    Eigen::Vector3f point;
+    float xsin, xcos, zsin, zcos;
+    xsin = std::sin(-yztheta);
+    xcos = std::cos(-yztheta);
+    zsin = std::sin(-yxtheta);
+    zcos = std::cos(-yxtheta);
+
+    xOri << 1, 0, 0,
+         0, xcos, -1*xsin,
+         0, xsin, xcos;
+
+    zOri << zcos, -1*zsin, 0,
+         zsin, zcos, 0,
+         0, 0, 1;
+
+    //ori = zOri*xOri;
+    ori = zOri*xOri;
+
+    for(auto &cl : cloud->points){
+        point[0] = cl.x;
+        point[1] = cl.y;
+        point[2] = cl.z;
+
+        point = xOri*point;
+
+        cl.x = point[0];
+        cl.y = point[1];
+        cl.z = point[2];
+    }
+}
+
+void Viewer::moveGraund(pcl::PointCloud<PointT>::Ptr cloud){
+    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+
+    pcl::SACSegmentation<PointT> seg;
+    seg.setOptimizeCoefficients(true);
+    seg.setInputCloud(cloud);
+    seg.setModelType(pcl::SACMODEL_PLANE);
+    seg.setMethodType(pcl::SAC_RANSAC);
+    seg.setDistanceThreshold(0.01);
+    seg.segment(*inliers, *coefficients);
+
+    double movementY = cloud->points[inliers->indices[0]].y;  
+
+    for(auto &cl : cloud->points)
+        cl.y -= movementY;
 }
 
 void Viewer::dyconCB(ssh_object_identification::ssh_object_identificationConfig &config, uint32_t level){
