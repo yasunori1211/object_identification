@@ -98,6 +98,7 @@ void Viewer::estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<
 }
 
 void Viewer::identify(){
+    std::lock_guard<std::mutex> _guard(mtx);
     /**Identify**/
 #pragma omp parallel for
     for(int i=0;i<clustered_cloud.size();i++){
