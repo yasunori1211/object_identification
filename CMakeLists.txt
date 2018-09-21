@@ -28,12 +28,6 @@ generate_dynamic_reconfigure_options(
   cfg/ssh_object_identification.cfg
 )
 
-find_package(OpenGL REQUIRED)
-set(QT_USE_QTOPENGL TRUE)
-set(QT_USE_QTXML TRUE)
-#find_package(Qt5Widgets REQUIRED)
-find_package(QGLViewer REQUIRED)
-## find_package(Qt5Declarative REQUIRED)
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
@@ -142,16 +136,10 @@ add_library(src_lib
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
-  #${Qt5Widgets_INCLUDES}
-  ${QGLVIEWER_INCLUDE_DIR}
-  ${QT_INCLUDES}
 )
 
 LIST(APPEND LINK_LIBS
   ${catkin_LIBRARIES}
-  #${Qt5Widgets_LIBRARIES}
-  ${QT_LIBRARIES}
-  ${QGLVIEWER_LIBRARY} GL glut GLU
 )
 
 ## Declare a C++ library
