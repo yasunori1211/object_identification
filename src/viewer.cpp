@@ -16,6 +16,12 @@ void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::Point
     std::vector<int> indices;
     pcl::removeNaNFromPointCloud(*cloud_filtered, *cloud_filtered, indices);
 
+    /**Down sampling**/
+    pcl::ApproximateVoxelGrid<pcl::PointXYZRGB> sor;
+    sor.setInputCloud(cloud_filtered);
+    sor.setLeafSize(0.01, 0.01, 0.01);
+    sor.filter(*cloud_filtered);
+
     /**Remove unnecessary point cloud**/
     removeDepth(cloud_filtered);
 
@@ -28,12 +34,6 @@ void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::Point
     /**Remove ground**/
     detectSurface(cloud_filtered, inliers);
     removeOrExtractSurface(cloud_filtered, inliers, true);
-
-    /**Down sampling**/
-    pcl::ApproximateVoxelGrid<pcl::PointXYZRGB> sor;
-    sor.setInputCloud(cloud_filtered);
-    sor.setLeafSize(0.01, 0.01, 0.01);
-    sor.filter(*cloud_filtered);
 
     //Initialize color
     for(int i=0;i<cloud_filtered->points.size();i++){
@@ -99,7 +99,8 @@ void Viewer::estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<
 
 void Viewer::identify(){
     /**Identify**/
-    for(int i=0;i<clustered_cloud.size();i++)
+#pragma omp parallel for
+    for(int i=0;i<clustered_cloud.size();i++){
         if(detectCylinder(clustered_cloud[i])){
             std::cout << "Detected cylinder!" << std::endl;
         }else if(detectRectangular(clustered_cloud[i])){
@@ -109,6 +110,7 @@ void Viewer::identify(){
         }else{
             std::cout << "Detected Other object" << std::endl;
         }
+    }
 }
 
 void Viewer::detectSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers){
@@ -311,10 +313,11 @@ void Viewer::clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::Poi
     ec.setInputCloud(cloud);  
     ec.extract (cluster_indices);  
 
-    for(std::vector<pcl::PointIndices>::const_iterator it=cluster_indices.begin();it!=cluster_indices.end();++it){
+    for(int i=0;i<cluster_indices.size();i++){
         pcl::PointCloud<PointT>::Ptr temp_cloud (new pcl::PointCloud<PointT>);
-        for(std::vector<int>::const_iterator pit=it->indices.begin();pit!=it->indices.end(); pit++)
-            temp_cloud->points.push_back(cloud->points[*pit]);
+        for(int j=0;j<cluster_indices[i].indices.size();j++)
+            temp_cloud->points.push_back(cloud->points[cluster_indices[i].indices[j]]);
+
         temp_cloud->width = temp_cloud->points.size();
         temp_cloud->height = 1;
         temp_cloud->is_dense = true;
@@ -369,16 +372,17 @@ void Viewer::orientation(pcl::PointCloud<PointT>::Ptr cloud){ std::vector<float>
     //ori = zOri*xOri;
     ori = zOri*xOri;
 
-    for(auto &cl : cloud->points){
-        point[0] = cl.x;
-        point[1] = cl.y;
-        point[2] = cl.z;
+#pragma omp parallel for private(point)
+    for(int i=0;i<cloud->points.size();i++){
+        point[0] = cloud->points[i].x;
+        point[1] = cloud->points[i].y;
+        point[2] = cloud->points[i].z;
 
         point = xOri*point;
 
-        cl.x = point[0];
-        cl.y = point[1];
-        cl.z = point[2];
+        cloud->points[i].x = point[0];
+        cloud->points[i].y = point[1];
+        cloud->points[i].z = point[2];
     }
 }
 

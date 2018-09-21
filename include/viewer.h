@@ -21,6 +21,8 @@
 #include <map>
 #include <string.h>
 #include <mutex>
+#include <omp.h>
+#include <chrono>
 
 #include <ssh_object_identification/ssh_object_identificationConfig.h>
 
