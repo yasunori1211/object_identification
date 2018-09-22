@@ -3,6 +3,7 @@
 Viewer::Viewer(){
     cylinderRadius = 0.1;
     sphereRadius = 0.2;
+    innerProductThreth = 0.1;
 }
 
 void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<PointT>::Ptr output){
@@ -223,31 +224,33 @@ bool Viewer::detectRectangular(pcl::PointCloud<PointT>::Ptr cloud){
     }
 
     bool orthogonal;
-    float threshold = 0.2;
     for(int i=0;i<coef.size();i++){
         if(i!=coef.size()-1){
             float ip = coef[i][0]*coef[i+1][0] + coef[i][1]*coef[i+1][1] + coef[i][2]*coef[i+1][2]; //inner product( cos(theta) )
-            if(std::abs(ip)>threshold){
+            if(std::abs(ip)>innerProductThreth){
                 orthogonal=false;
                 break;
             }
         }else{
             float ip = coef[i][0]*coef[0][0] + coef[i][1]*coef[0][1] + coef[i][2]*coef[0][2];
-            if(ip<threshold)
+            if(std::abs(ip)<innerProductThreth)
+                std::cout << ip << std::endl;
                 orthogonal=true;
         }
     }
 
-    if(numPlanes>=2&&orthogonal){ //Detected rectangular
-        //Add red color to rectangular
-        for(int i=0;i<rectangular->points.size();i++){
-            rectangular->points[i].r = 255; 
-            rectangular->points[i].g = 0; 
-            rectangular->points[i].b = 0; 
-        }
+    if(numPlanes>=2){ //Detected rectangular
+        if(orthogonal){
+            //Add red color to rectangular
+            for(int i=0;i<rectangular->points.size();i++){
+                rectangular->points[i].r = 255; 
+                rectangular->points[i].g = 0; 
+                rectangular->points[i].b = 0; 
+            }
 
-        *cloud = *rectangular + *cloud_cp;
-        return true;
+            *cloud = *rectangular + *cloud_cp;
+            return true;
+        }
     }else{
         return false; 
     }
@@ -314,14 +317,17 @@ void Viewer::clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::Poi
     ec.setInputCloud(cloud);  
     ec.extract (cluster_indices);  
 
+//    int i,j;
+#pragma omp parallel for
     for(int i=0;i<cluster_indices.size();i++){
         pcl::PointCloud<PointT>::Ptr temp_cloud (new pcl::PointCloud<PointT>);
         for(int j=0;j<cluster_indices[i].indices.size();j++)
-            temp_cloud->points.push_back(cloud->points[cluster_indices[i].indices[j]]);
+            temp_cloud->points.emplace_back(cloud->points[cluster_indices[i].indices[j]]);
 
         temp_cloud->width = temp_cloud->points.size();
         temp_cloud->height = 1;
         temp_cloud->is_dense = true;
+#pragma omp critical
         clustered_cloud.emplace_back(temp_cloud);
     }
 
@@ -409,4 +415,5 @@ void Viewer::dyconCB(ssh_object_identification::ssh_object_identificationConfig 
     std::lock_guard<std::mutex> _guard(mtx);
     cylinderRadius = config.double_cylinderRadiusLimits;
     sphereRadius = config.double_sphereRadiusLimits;
+    //innerProductThreth = config.double_rectangularInnerProductThreth;
 }
