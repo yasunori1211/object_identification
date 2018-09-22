@@ -57,5 +57,6 @@ class Viewer{
         //parameters
         double cylinderRadius;
         double sphereRadius;
+        double innerProductThreth;
 };
 
