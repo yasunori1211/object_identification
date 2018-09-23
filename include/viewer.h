@@ -24,7 +24,7 @@
 #include <omp.h>
 #include <chrono>
 
-#include <ssh_object_identification/ssh_object_identificationConfig.h>
+#include <ssh_object_identification/sshObjectIdentificationParamsConfig.h>
 
 typedef pcl::PointXYZRGB PointT;
 
@@ -47,7 +47,7 @@ class Viewer{
         void clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::PointCloud<PointT>::Ptr> &clustered_cloud);
         void orientation(pcl::PointCloud<PointT>::Ptr cloud);
         void moveGraund(pcl::PointCloud<PointT>::Ptr cloud);
-        void dyconCB(ssh_object_identification::ssh_object_identificationConfig &config, uint32_t level);
+        void dyconCB(ssh_object_identification::sshObjectIdentificationParamsConfig &config, uint32_t level);
 
     private:
         bool setedPC;
@@ -55,8 +55,10 @@ class Viewer{
         std::vector<pcl::PointCloud<PointT>::Ptr> clustered_cloud;
         std::mutex mtx;
         //parameters
-        double cylinderRadius;
-        double sphereRadius;
+        double minCylinderRadius;
+        double maxCylinderRadius;
+        double minSphereRadius;
+        double maxSphereRadius;
         double innerProductThreth;
 };
 

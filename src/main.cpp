@@ -40,8 +40,8 @@ int main( int argc, char** argv ) {
     pub = nh.advertise<sensor_msgs::PointCloud2>("ssh_object_identification/output", 1);
 
     //Recongiture
-    dynamic_reconfigure::Server<ssh_object_identification::ssh_object_identificationConfig> server;
-    dynamic_reconfigure::Server<ssh_object_identification::ssh_object_identificationConfig>::CallbackType f;
+    dynamic_reconfigure::Server<ssh_object_identification::sshObjectIdentificationParamsConfig> server;
+    dynamic_reconfigure::Server<ssh_object_identification::sshObjectIdentificationParamsConfig>::CallbackType f;
 
     f = boost::bind(&Viewer::dyconCB, &viewer, _1, _2);
     server.setCallback(f);

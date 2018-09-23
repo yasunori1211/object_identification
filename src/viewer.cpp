@@ -1,8 +1,10 @@
 #include "viewer.h"
 
 Viewer::Viewer(){
-    cylinderRadius = 0.1;
-    sphereRadius = 0.2;
+    minCylinderRadius = 0.0;
+    maxCylinderRadius = 0.1;
+    minSphereRadius = 0.0;
+    maxSphereRadius = 0.2;
     innerProductThreth = 0.1;
 }
 
@@ -147,7 +149,7 @@ bool Viewer::detectCylinder(pcl::PointCloud<PointT>::Ptr cloud){
     seg.setNormalDistanceWeight (0.1);
     seg.setMaxIterations(10000);
     seg.setDistanceThreshold(0.03);
-    seg.setRadiusLimits(0, cylinderRadius);
+    seg.setRadiusLimits(minCylinderRadius, maxCylinderRadius);
     seg.setInputNormals (cloud_normals);
     seg.segment(*inliers, *coefficients);
 
@@ -274,7 +276,7 @@ bool Viewer::detectSphere(pcl::PointCloud<PointT>::Ptr cloud){
     seg.setNormalDistanceWeight (0.1);
     seg.setMaxIterations(10000);
     seg.setDistanceThreshold(0.03);
-    seg.setRadiusLimits(0, sphereRadius);
+    seg.setRadiusLimits(minSphereRadius, maxSphereRadius);
     seg.setInputNormals (cloud_normals);
     seg.segment(*inliers, *coefficients);
 
@@ -411,9 +413,11 @@ void Viewer::moveGraund(pcl::PointCloud<PointT>::Ptr cloud){
         cl.y -= movementY;
 }
 
-void Viewer::dyconCB(ssh_object_identification::ssh_object_identificationConfig &config, uint32_t level){
+void Viewer::dyconCB(ssh_object_identification::sshObjectIdentificationParamsConfig &config, uint32_t level){
     std::lock_guard<std::mutex> _guard(mtx);
-    cylinderRadius = config.double_cylinderRadiusLimits;
-    sphereRadius = config.double_sphereRadiusLimits;
+    minCylinderRadius = config.double_minCylinderRadiusLimits;
+    maxCylinderRadius = config.double_maxCylinderRadiusLimits;
+    minSphereRadius = config.double_minSphereRadiusLimits;
+    maxSphereRadius = config.double_maxSphereRadiusLimits;
     //innerProductThreth = config.double_rectangularInnerProductThreth;
 }
