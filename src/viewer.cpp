@@ -70,7 +70,7 @@ void Viewer::removeDepth(pcl::PointCloud<PointT>::Ptr cloud){
     pcl::PassThrough<PointT> pass; 
     pass.setInputCloud (cloud);
     pass.setFilterFieldName ("z"); 
-    pass.setFilterLimits (0.0, 1.5);
+    pass.setFilterLimits (0.0, 1.0);
     pass.filter (*cloud);
     pass.setFilterFieldName ("x"); 
     pass.setFilterLimits (-1.0, 1.0);
@@ -125,7 +125,7 @@ void Viewer::detectSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices
     seg.setInputCloud(cloud);
     seg.setModelType(pcl::SACMODEL_PLANE);
     seg.setMethodType(pcl::SAC_RANSAC);
-    seg.setDistanceThreshold(0.01);
+    seg.setDistanceThreshold(0.015);
     seg.segment(*inliers, *coefficients);
 
     normal = coefficients->values;
