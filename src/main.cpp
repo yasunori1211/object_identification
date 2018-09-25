@@ -34,7 +34,7 @@ int main( int argc, char** argv ) {
     ros::NodeHandle nh;
 
     // Create a ROS subscriber for the input point cloud
-    ros::Subscriber sub = nh.subscribe("/kinect2/sd/points", 1, pointcloudCb);
+    ros::Subscriber sub = nh.subscribe("/kinect2/hd/points", 1, pointcloudCb);
 
     // Create a ROS publisher for the output point cloud
     pub = nh.advertise<sensor_msgs::PointCloud2>("ssh_object_identification/output", 1);
