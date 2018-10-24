@@ -28,12 +28,6 @@ void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::Point
     /**Remove unnecessary point cloud**/
     removeDepth(cloud_filtered);
 
-    /**Orientation along X-Y Plane**/
-    detectSurface(cloud_filtered, inliers);
-    orientation(cloud_filtered);
-
-    moveGraund(cloud_filtered);
-
     /**Remove ground**/
     detectSurface(cloud_filtered, inliers);
     removeOrExtractSurface(cloud_filtered, inliers, true);

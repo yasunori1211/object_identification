@@ -15,12 +15,7 @@ void pointcloudCb(const sensor_msgs::PointCloud2ConstPtr& input){
 
     pcl::fromROSMsg(*input, *cloud);
 
-    std::chrono::system_clock::time_point start, end;
-    start = std::chrono::system_clock::now();
     viewer.setPointCloud(cloud, outputPclCloud);
-    end = std::chrono::system_clock::now();
-
-    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << std::endl;
 
     outputPclCloud->header.frame_id = input->header.frame_id;
 
