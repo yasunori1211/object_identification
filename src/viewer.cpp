@@ -230,7 +230,6 @@ bool Viewer::detectRectangular(pcl::PointCloud<PointT>::Ptr cloud){
         }else{
             float ip = coef[i][0]*coef[0][0] + coef[i][1]*coef[0][1] + coef[i][2]*coef[0][2];
             if(std::abs(ip)<innerProductThreth)
-                std::cout << ip << std::endl;
                 orthogonal=true;
         }
     }
