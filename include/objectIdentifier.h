@@ -28,12 +28,24 @@
 
 typedef pcl::PointXYZRGB PointT;
 
-
-class Viewer{
+class ObjectIdentifier{
     public:
-        Viewer();
-        void setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<PointT>::Ptr output);
+        ObjectIdentifier();
+        void identifyObject(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<PointT>::Ptr output); //Main function
+        void dyconCB(ssh_object_identification::sshObjectIdentificationParamsConfig &config, uint32_t level); //Reconfigure callback function
 
+    private:
+        std::vector<float> normal;
+        std::vector<pcl::PointCloud<PointT>::Ptr> clustered_cloud;
+        std::mutex mtx;
+
+        //parameters for identify
+        double minCylinderRadius;
+        double maxCylinderRadius;
+        double minSphereRadius;
+        double maxSphereRadius;
+        double innerProductThreth;
+        
         //Function Operates Point Cloud
         void removeOrExtractSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers, bool negative);
         void estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<pcl::Normal>::Ptr normals);
@@ -45,20 +57,5 @@ class Viewer{
         bool detectSphere(pcl::PointCloud<PointT>::Ptr cloudi);
         bool detectRectangular(pcl::PointCloud<PointT>::Ptr cloud);
         void clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::PointCloud<PointT>::Ptr> &clustered_cloud);
-        void orientation(pcl::PointCloud<PointT>::Ptr cloud);
-        void moveGraund(pcl::PointCloud<PointT>::Ptr cloud);
-        void dyconCB(ssh_object_identification::sshObjectIdentificationParamsConfig &config, uint32_t level);
-
-    private:
-        bool setedPC;
-        std::vector<float> normal;
-        std::vector<pcl::PointCloud<PointT>::Ptr> clustered_cloud;
-        std::mutex mtx;
-        //parameters
-        double minCylinderRadius;
-        double maxCylinderRadius;
-        double minSphereRadius;
-        double maxSphereRadius;
-        double innerProductThreth;
 };
 

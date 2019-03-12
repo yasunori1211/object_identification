@@ -1,6 +1,6 @@
-#include "viewer.h"
+#include "objectIdentifier.h"
 
-Viewer::Viewer(){
+ObjectIdentifier::ObjectIdentifier(){
     minCylinderRadius = 0.0;
     maxCylinderRadius = 0.1;
     minSphereRadius = 0.0;
@@ -8,27 +8,27 @@ Viewer::Viewer(){
     innerProductThreth = 0.1;
 }
 
-void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<PointT>::Ptr output){
+void ObjectIdentifier::identifyObject(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<PointT>::Ptr output){
     pcl::PointCloud<PointT>::Ptr cloud_filtered (new pcl::PointCloud<PointT>);
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
 
     //PointXYZ to PointXYZRGB
     pcl::copyPointCloud(*cloud, *cloud_filtered);
 
-    /**Remove nan points**/
+    //Remove nan points
     std::vector<int> indices;
     pcl::removeNaNFromPointCloud(*cloud_filtered, *cloud_filtered, indices);
 
-    /**Down sampling**/
+    //Down sampling
     pcl::ApproximateVoxelGrid<pcl::PointXYZRGB> sor;
     sor.setInputCloud(cloud_filtered);
     sor.setLeafSize(0.01, 0.01, 0.01);
     sor.filter(*cloud_filtered);
 
-    /**Remove unnecessary point cloud**/
+    //Remove unnecessary point cloud
     removeDepth(cloud_filtered);
 
-    /**Remove ground**/
+    //Remove ground
     detectSurface(cloud_filtered, inliers);
     removeOrExtractSurface(cloud_filtered, inliers, true);
 
@@ -39,9 +39,10 @@ void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::Point
         cloud_filtered->points[i].b = 200;
     }
 
-    /**Clustering the point cloud**/
+    //Clustering the point cloud
     clustering(cloud_filtered, clustered_cloud);
 
+    //Identify clustered point cloud
     identify();
 
     pcl::PointCloud<PointT>::Ptr temp (new pcl::PointCloud<PointT>);
@@ -52,7 +53,16 @@ void Viewer::setPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::Point
     pcl::copyPointCloud(*temp, *output);
 }
 
-void Viewer::removeOutlier(pcl::PointCloud<PointT>::Ptr cloud){
+void ObjectIdentifier::dyconCB(ssh_object_identification::sshObjectIdentificationParamsConfig &config, uint32_t level){
+    std::lock_guard<std::mutex> _guard(mtx);
+    minCylinderRadius = config.double_minCylinderRadiusLimits;
+    maxCylinderRadius = config.double_maxCylinderRadiusLimits;
+    minSphereRadius = config.double_minSphereRadiusLimits;
+    maxSphereRadius = config.double_maxSphereRadiusLimits;
+    //innerProductThreth = config.double_rectangularInnerProductThreth;
+}
+
+void ObjectIdentifier::removeOutlier(pcl::PointCloud<PointT>::Ptr cloud){
     pcl::StatisticalOutlierRemoval<PointT> sor;
     sor.setInputCloud (cloud);
     sor.setMeanK (5);
@@ -60,21 +70,21 @@ void Viewer::removeOutlier(pcl::PointCloud<PointT>::Ptr cloud){
     sor.filter (*cloud);
 }
 
-void Viewer::removeDepth(pcl::PointCloud<PointT>::Ptr cloud){
+void ObjectIdentifier::removeDepth(pcl::PointCloud<PointT>::Ptr cloud){
     pcl::PassThrough<PointT> pass; 
     pass.setInputCloud (cloud);
-    pass.setFilterFieldName ("z"); 
-    pass.setFilterLimits (0.0, 1.0);
-    pass.filter (*cloud);
     pass.setFilterFieldName ("x"); 
     pass.setFilterLimits (-1.0, 1.0);
     pass.filter (*cloud);
     pass.setFilterFieldName ("y"); 
     pass.setFilterLimits (-1.0, 1.0);
     pass.filter (*cloud);
+    pass.setFilterFieldName ("z"); 
+    pass.setFilterLimits (0.0, 1.0);
+    pass.filter (*cloud);
 }
 
-void Viewer::removeOrExtractSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers, bool negative){
+void ObjectIdentifier::removeOrExtractSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers, bool negative){
     //Remove or Extract surface
     //True means removing surface, false means extracting surface
     pcl::ExtractIndices<PointT> extract;
@@ -85,7 +95,7 @@ void Viewer::removeOrExtractSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::Poi
     extract.filter(*cloud);
 }
 
-void Viewer::estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<pcl::Normal>::Ptr normals){
+void ObjectIdentifier::estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<pcl::Normal>::Ptr normals){
     pcl::NormalEstimationOMP<PointT, pcl::Normal> ne;  
     pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT> ()); 
     ne.setInputCloud (cloud);
@@ -94,7 +104,7 @@ void Viewer::estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<
     ne.compute (*normals);
 }
 
-void Viewer::identify(){
+void ObjectIdentifier::identify(){
     std::lock_guard<std::mutex> _guard(mtx);
     /**Identify**/
 #pragma omp parallel for
@@ -111,7 +121,7 @@ void Viewer::identify(){
     }
 }
 
-void Viewer::detectSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers){
+void ObjectIdentifier::detectSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers){
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
 
     pcl::SACSegmentation<PointT> seg;
@@ -125,7 +135,7 @@ void Viewer::detectSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices
     normal = coefficients->values;
 }
 
-bool Viewer::detectCylinder(pcl::PointCloud<PointT>::Ptr cloud){
+bool ObjectIdentifier::detectCylinder(pcl::PointCloud<PointT>::Ptr cloud){
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
     pcl::ExtractIndices<PointT> extract;
@@ -181,7 +191,7 @@ bool Viewer::detectCylinder(pcl::PointCloud<PointT>::Ptr cloud){
     }
 }
 
-bool Viewer::detectRectangular(pcl::PointCloud<PointT>::Ptr cloud){
+bool ObjectIdentifier::detectRectangular(pcl::PointCloud<PointT>::Ptr cloud){
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
     pcl::ExtractIndices<PointT> extract;
@@ -251,7 +261,7 @@ bool Viewer::detectRectangular(pcl::PointCloud<PointT>::Ptr cloud){
     }
 }
 
-bool Viewer::detectSphere(pcl::PointCloud<PointT>::Ptr cloud){
+bool ObjectIdentifier::detectSphere(pcl::PointCloud<PointT>::Ptr cloud){
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
     pcl::ExtractIndices<PointT> extract;
@@ -298,7 +308,7 @@ bool Viewer::detectSphere(pcl::PointCloud<PointT>::Ptr cloud){
     }
 }
 
-void Viewer::clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::PointCloud<PointT>::Ptr> &clustered_cloud){
+void ObjectIdentifier::clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::PointCloud<PointT>::Ptr> &clustered_cloud){
     clustered_cloud.clear();
     pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT>);  
     tree->setInputCloud (cloud);  
@@ -340,77 +350,4 @@ void Viewer::clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vector<pcl::Poi
     }
     **/
     std::cout << "Found " << cluster_indices.size() << " cluster" << std::endl;
-}
-
-void Viewer::orientation(pcl::PointCloud<PointT>::Ptr cloud){ std::vector<float> origin{0.0,-1.0,0.0};
-    float yxCosTheta, yzCosTheta;
-    float yxtheta, yztheta;
-
-    float yxscalar = std::sqrt(std::pow(origin[0], 2)+std::pow(origin[1], 2))*std::sqrt(std::pow(normal[0], 2)+std::pow(normal[1], 2));
-    float yzscalar = std::sqrt(std::pow(origin[1], 2)+std::pow(origin[2], 2))*std::sqrt(std::pow(normal[1], 2)+std::pow(normal[2], 2));
-
-    yxCosTheta = (origin[0]*normal[0] + origin[1]*normal[1])/yxscalar;
-    yzCosTheta = (origin[0]*normal[0] + origin[1]*normal[1])/yzscalar;
-
-    yxtheta = std::acos(yxCosTheta);
-    yztheta = std::acos(yzCosTheta);
-
-    Eigen::Matrix3f xOri, zOri, ori;
-    Eigen::Vector3f point;
-    float xsin, xcos, zsin, zcos;
-    xsin = std::sin(-yztheta);
-    xcos = std::cos(-yztheta);
-    zsin = std::sin(-yxtheta);
-    zcos = std::cos(-yxtheta);
-
-    xOri << 1, 0, 0,
-         0, xcos, -1*xsin,
-         0, xsin, xcos;
-
-    zOri << zcos, -1*zsin, 0,
-         zsin, zcos, 0,
-         0, 0, 1;
-
-    //ori = zOri*xOri;
-    ori = zOri*xOri;
-
-#pragma omp parallel for private(point)
-    for(int i=0;i<cloud->points.size();i++){
-        point[0] = cloud->points[i].x;
-        point[1] = cloud->points[i].y;
-        point[2] = cloud->points[i].z;
-
-        point = xOri*point;
-
-        cloud->points[i].x = point[0];
-        cloud->points[i].y = point[1];
-        cloud->points[i].z = point[2];
-    }
-}
-
-void Viewer::moveGraund(pcl::PointCloud<PointT>::Ptr cloud){
-    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
-    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
-
-    pcl::SACSegmentation<PointT> seg;
-    seg.setOptimizeCoefficients(true);
-    seg.setInputCloud(cloud);
-    seg.setModelType(pcl::SACMODEL_PLANE);
-    seg.setMethodType(pcl::SAC_RANSAC);
-    seg.setDistanceThreshold(0.01);
-    seg.segment(*inliers, *coefficients);
-
-    double movementY = cloud->points[inliers->indices[0]].y;  
-
-    for(auto &cl : cloud->points)
-        cl.y -= movementY;
-}
-
-void Viewer::dyconCB(ssh_object_identification::sshObjectIdentificationParamsConfig &config, uint32_t level){
-    std::lock_guard<std::mutex> _guard(mtx);
-    minCylinderRadius = config.double_minCylinderRadiusLimits;
-    maxCylinderRadius = config.double_maxCylinderRadiusLimits;
-    minSphereRadius = config.double_minSphereRadiusLimits;
-    maxSphereRadius = config.double_maxSphereRadiusLimits;
-    //innerProductThreth = config.double_rectangularInnerProductThreth;
 }
