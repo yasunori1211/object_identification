@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(ssh_object_identification)
+project(object_identification)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake)
 
@@ -25,7 +25,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 generate_dynamic_reconfigure_options(
-  cfg/ssh_object_identification.cfg
+  cfg/object_identification.cfg
 )
 
 ###################################
@@ -39,7 +39,7 @@ generate_dynamic_reconfigure_options(
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES ssh_object_identification
+  LIBRARIES object_identification
 #  CATKIN_DEPENDS cv_bridge dynamic_reconfigure pcl_conversions pcl_msgs pcl_ros rosbag roscpp rospy sensor_msgs std_msgs
 #  DEPENDS system_lib
 )

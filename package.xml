@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>ssh_object_identification</name>
+  <name>object_identification</name>
   <version>0.0.0</version>
-  <description>The ssh_object_identification package</description>
+  <description>The object_identification package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->

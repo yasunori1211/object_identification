@@ -106,7 +106,7 @@ void ObjectIdentifier::estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::P
 
 void ObjectIdentifier::identify(){
     std::lock_guard<std::mutex> _guard(mtx);
-    /**Identify**/
+    //Identify
 #pragma omp parallel for
     for(int i=0;i<clustered_cloud.size();i++){
         if(detectCylinder(clustered_cloud[i])){
