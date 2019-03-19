@@ -11,9 +11,9 @@
 
 ## Example
 
-Publish a point cloud using ex. [iai_kinect2](https://github.com/code-iai/iai_kinect2).
-Subscribed topic name is "/kinect2/hd/points".
-And launch following command.
+Publish a point cloud using ex. [iai_kinect2](https://github.com/code-iai/iai_kinect2).   
+Subscribed topic name is "/kinect2/hd/points".  
+And launch following command.  
 ```bash
 roslaunch object_identification object_identification.launch
 ```
