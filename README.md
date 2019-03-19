@@ -1,6 +1,6 @@
 # object_identification
 
-***object_identification*** is a ROS package for identifing rectangle, cylinder, sphere and others from 3D point cloud.
+***object_identification*** is a ROS package for identifing rectangle(red), cylinder(green), sphere(blue) and others(gray) from 3D point cloud.
 
 ![Identification Result](images/result.gif)
 
