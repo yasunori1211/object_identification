@@ -1,6 +1,13 @@
 #include "objectIdentifier.h"
 
-ObjectIdentifier::ObjectIdentifier(){
+ObjectIdentifier::ObjectIdentifier(ros::NodeHandlePtr _nodeHandlePtr){
+    nodeHandlePtr = _nodeHandlePtr;
+    
+    removedDepthPCPublisher = nodeHandlePtr->advertise<sensor_msgs::PointCloud2>("object_identification/removedDepthPC", 1);
+    removedSurfacePCPublisher = nodeHandlePtr->advertise<sensor_msgs::PointCloud2>("object_identification/removedSurfacePC", 1);
+    clusteredPCPublisher = nodeHandlePtr->advertise<sensor_msgs::PointCloud2>("object_identification/clusteredPC", 1);
+    verbose = true;
+
     minCylinderRadius = 0.0;
     maxCylinderRadius = 0.1;
     minSphereRadius = 0.0;
@@ -53,14 +60,14 @@ void ObjectIdentifier::identifyObject(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
     pcl::copyPointCloud(*temp, *output);
 }
 
-void ObjectIdentifier::dyconCB(ssh_object_identification::sshObjectIdentificationParamsConfig &config, uint32_t level){
-    std::lock_guard<std::mutex> _guard(mtx);
-    minCylinderRadius = config.double_minCylinderRadiusLimits;
-    maxCylinderRadius = config.double_maxCylinderRadiusLimits;
-    minSphereRadius = config.double_minSphereRadiusLimits;
-    maxSphereRadius = config.double_maxSphereRadiusLimits;
-    //innerProductThreth = config.double_rectangularInnerProductThreth;
-}
+// void ObjectIdentifier::dyconCB(ssh_object_identification::sshObjectIdentificationParamsConfig &config, uint32_t level){
+//     std::lock_guard<std::mutex> _guard(mtx);
+//     minCylinderRadius = config.double_minCylinderRadiusLimits;
+//     maxCylinderRadius = config.double_maxCylinderRadiusLimits;
+//     minSphereRadius = config.double_minSphereRadiusLimits;
+//     maxSphereRadius = config.double_maxSphereRadiusLimits;
+//     //innerProductThreth = config.double_rectangularInnerProductThreth;
+// }
 
 void ObjectIdentifier::removeOutlier(pcl::PointCloud<PointT>::Ptr cloud){
     pcl::StatisticalOutlierRemoval<PointT> sor;
@@ -82,6 +89,18 @@ void ObjectIdentifier::removeDepth(pcl::PointCloud<PointT>::Ptr cloud){
     pass.setFilterFieldName ("z"); 
     pass.setFilterLimits (0.0, 1.0);
     pass.filter (*cloud);
+
+    if(verbose){
+        for(int i=0;i<cloud->points.size();i++){
+            cloud->points[i].r = 200;
+            cloud->points[i].g = 200;
+            cloud->points[i].b = 200;
+        }
+
+        sensor_msgs::PointCloud2 output;
+        pcl::toROSMsg(*cloud, output);
+        removedDepthPCPublisher.publish(output);
+    }
 }
 
 void ObjectIdentifier::removeOrExtractSurface(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointIndices::Ptr inliers, bool negative){
@@ -93,6 +112,18 @@ void ObjectIdentifier::removeOrExtractSurface(pcl::PointCloud<PointT>::Ptr cloud
     extract.setIndices(inliers);
     extract.setNegative(negative);
     extract.filter(*cloud);
+
+    if(verbose){
+        for(int i=0;i<cloud->points.size();i++){
+            cloud->points[i].r = 200;
+            cloud->points[i].g = 200;
+            cloud->points[i].b = 200;
+        }
+
+        sensor_msgs::PointCloud2 output;
+        pcl::toROSMsg(*cloud, output);
+        removedSurfacePCPublisher.publish(output);
+    }
 }
 
 void ObjectIdentifier::estimateNormal(pcl::PointCloud<PointT>::Ptr cloud, pcl::PointCloud<pcl::Normal>::Ptr normals){
@@ -336,18 +367,38 @@ void ObjectIdentifier::clustering(pcl::PointCloud<PointT>::Ptr cloud, std::vecto
         clustered_cloud.emplace_back(temp_cloud);
     }
 
-    /**
-    //Add color to each cluster
-    float colors[6][3] = {{255,0,0},{0,255,0},{0,0,255},{255,255,0},{255,0,255},{0,255,255}};
-    int j=0;
-    for(auto cl : clustered_cloud){
-        for(int i=0;i<cl->points.size();i++){
-            cl->points[i].r = colors[j%6][0];
-            cl->points[i].g = colors[j%6][1];
-            cl->points[i].b = colors[j%6][2];
+    if(verbose){
+        //Add color to each cluster
+        float colors[6][3] = {{255,0,0},{0,255,0},{0,0,255},{255,255,0},{255,0,255},{0,255,255}};
+        int j=0;
+        for(auto cl : clustered_cloud){
+            for(int i=0;i<cl->points.size();i++){
+                cl->points[i].r = colors[j%6][0];
+                cl->points[i].g = colors[j%6][1];
+                cl->points[i].b = colors[j%6][2];
+            }
+            j++;
         }
-        j++;
+
+        pcl::PointCloud<PointT>::Ptr temp (new pcl::PointCloud<PointT>);
+        temp->header.frame_id = cloud->header.frame_id;
+        for(auto cl : clustered_cloud){
+            *temp += *cl;
+        }
+
+        sensor_msgs::PointCloud2 output;
+        pcl::toROSMsg(*temp, output);
+        clusteredPCPublisher.publish(output);
+
+        //To gray color
+        for(auto cl : clustered_cloud){
+            for(int i=0;i<cl->points.size();i++){
+                cl->points[i].r = 200;
+                cl->points[i].g = 200;
+                cl->points[i].b = 200;
+            }
+        }
     }
-    **/
+
     std::cout << "Found " << cluster_indices.size() << " cluster" << std::endl;
 }

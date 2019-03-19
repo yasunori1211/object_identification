@@ -24,20 +24,25 @@
 #include <omp.h>
 #include <chrono>
 
-#include <ssh_object_identification/sshObjectIdentificationParamsConfig.h>
+// #include <object_identification/objectIdentificationParamsConfig.h>
 
 typedef pcl::PointXYZRGB PointT;
 
 class ObjectIdentifier{
     public:
-        ObjectIdentifier();
+        ObjectIdentifier(ros::NodeHandlePtr _nodeHandlePtr);
         void identifyObject(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<PointT>::Ptr output); //Main function
-        void dyconCB(ssh_object_identification::sshObjectIdentificationParamsConfig &config, uint32_t level); //Reconfigure callback function
+        // void dyconCB(object_identification::objectIdentificationParamsConfig &config, uint32_t level); //Reconfigure callback function
 
     private:
         std::vector<float> normal;
         std::vector<pcl::PointCloud<PointT>::Ptr> clustered_cloud;
         std::mutex mtx;
+        ros::NodeHandlePtr nodeHandlePtr;
+        ros::Publisher removedDepthPCPublisher;
+        ros::Publisher removedSurfacePCPublisher;
+        ros::Publisher clusteredPCPublisher;
+        bool verbose;
 
         //parameters for identify
         double minCylinderRadius;

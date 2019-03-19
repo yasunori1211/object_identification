@@ -1,6 +1,6 @@
 <launch>
-    <include file="$(find kinect2_bridge)/launch/kinect2_bridge.launch" />
+    <!-- <include file="$(find kinect2_bridge)/launch/kinect2_bridge.launch" /> -->
    <node name="object_identification" pkg="object_identification" type="object_identification" output="screen" />
-   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find object_identification)/config/ssh.rviz" />
+   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find object_identification)/config/conf.rviz" />
    <!-- <node name="reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" /> -->
 </launch>

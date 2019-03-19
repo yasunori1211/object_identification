@@ -24,9 +24,9 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
 )
 
-generate_dynamic_reconfigure_options(
-  cfg/object_identification.cfg
-)
+# generate_dynamic_reconfigure_options(
+#   cfg/object_identification.cfg
+# )
 
 ###################################
 ## catkin specific configuration ##
